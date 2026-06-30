@@ -1,0 +1,6 @@
+[submodule "modules/usbadc-support"]
+	path = modules/acm-toolbox
+	url = git@github.com:till-s/usbadc-support
+[submodule "modules/mecatica-usb"]
+	path = modules/mecatica-usb
+	url = git@github.com:till-s/mecatica-usb
