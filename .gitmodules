@@ -4,3 +4,6 @@
 [submodule "modules/mecatica-usb"]
 	path = modules/mecatica-usb
 	url = git@github.com:till-s/mecatica-usb
+[submodule "modules/efx-scripts"]
+	path = modules/efx-scripts
+	url = git@github.com:till-s/efx-scripts.git
