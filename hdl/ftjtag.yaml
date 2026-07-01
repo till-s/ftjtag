@@ -1,0 +1,8 @@
+# YAML to control USB descriptor generation using genAppCfgPkgBody.py
+deviceDesc:
+  idProduct:                  0x0001
+  iProduct:                   "Till's JTAG Adapter"
+  configurationDesc:
+    # ACM is enabled by default anyways; made explicit FYI
+    functionACM:
+      enabled:                true

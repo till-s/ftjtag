@@ -1,0 +1,5 @@
+GitVersionPkg.vhd
+outflow
+work_*
+*.peri.xml
+*.pt.sdc
