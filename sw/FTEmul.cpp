@@ -163,9 +163,15 @@ FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_
 	tvec[tveclen].buf = &len;
 	tvec[tveclen].len = sizeof(len);
 	tveclen++;
+	Bytes empty;
 	if ( tbuf && tsiz > 0 ) {
 		tvec[tveclen].buf = tbuf;
 		tvec[tveclen].len = tsiz;
+		tveclen++;
+	} else {
+		empty.resize(rsiz);
+		tvec[tveclen].buf = &empty[0];
+		tvec[tveclen].len = rsiz;
 		tveclen++;
 	}
 	if ( rbuf && rsiz > 0 ) {
