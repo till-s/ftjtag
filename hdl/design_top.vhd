@@ -358,11 +358,11 @@ begin
    ledIn(0)                  <= '0'; --gpsPps;
 
    fpgaGpio_OUT(1)           <= tck;
-   fpgaGpio_OE (1)           <= '1';
+   fpgaGpio_OE (1)           <= not genRegReq.scratch(0);
    fpgaGpio_OUT(2)           <= tms;
-   fpgaGpio_OE (2)           <= '1';
+   fpgaGpio_OE (2)           <= not genRegReq.scratch(0);
    fpgaGpio_OUT(3)           <= tdi;
-   fpgaGpio_OE (3)           <= '1';
+   fpgaGpio_OE (3)           <= not genRegReq.scratch(0);
    fpgaGpio_OE (4)           <= '0';
    tdo                       <= fpgaGpio_IN(4);
 
