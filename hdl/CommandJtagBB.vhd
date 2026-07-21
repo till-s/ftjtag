@@ -56,11 +56,15 @@ end entity CommandJtagBB;
 
 architecture rtl of CommandJtagBB is
 
-   type StateType is (ECHO, LEN, READ, WRITE, DON, WAI);
+   type StateType is (ECHO, BB, LEN, READ, WRITE, DON, WAI);
 
    subtype CountType is integer range  -1 to HPER_DELAY_G - 1;
 
    subtype SubCommandType is std_logic_vector(7-NUM_CMD_BITS_C downto 0);
+
+   constant SUBCMD_TDI_C : SubCommandType := SubCommandType( to_unsigned( 0, SubCommandType'length ) );
+   constant SUBCMD_TMS_C : SubCommandType := SubCommandType( to_unsigned( 1, SubCommandType'length ) );
+   constant SUBCMD_BB_C  : SubCommandType := SubCommandType( to_unsigned( 2, SubCommandType'length ) );
 
    type RegType is record
       state         : StateType;
@@ -102,11 +106,11 @@ begin
 
    P_COMB : process ( r, mIb, rOb, rIbLoc, tdo ) is
       variable v       : RegType;
-      variable isTMS   : std_logic;
+      variable isTMS   : boolean;
    begin
       v := r;
 
-      isTMS   := r.cmd(0);
+      isTMS   := (r.cmd = SUBCMD_TMS_C);
 
       mOb.dat <= r.tdoSR;
       mOb.vld <= '0';
@@ -114,7 +118,7 @@ begin
 
       rIbLoc  <= '1';
 
-      if ( isTMS = '1' ) then
+      if ( isTMS ) then
          tms <= r.sr(0);
          tdi <= r.tdi;
       else
@@ -135,8 +139,27 @@ begin
             v.lstSeen := '0';
             if ( (rOb and mIb.vld) = '1' ) then
                v.cmd := mIb.dat(7 downto NUM_CMD_BITS_C);
-               if ( mIb.lst /= '1' ) then
+               if ( v.cmd = SUBCMD_BB_C ) then
+                  v.state := BB;
+               else
                   v.state := LEN;
+               end if;
+               if ( mIb.lst = '1' ) then
+                  v.state := r.state;
+               end if;
+            end if;
+
+	 when BB  =>
+	    mOb <= mIb;
+            if ( mIb.vld = '1' ) then
+               v.tck   := mIb.dat(0);
+               v.tdi   := mIb.dat(1);
+               v.sr(0) := mIb.dat(1);
+               v.tms   := mIb.dat(3);
+               if ( (rOb and mIb.lst) = '1' ) then
+                  v.state := ECHO;
+               else
+                  v.state := DON;
                end if;
             end if;
 
@@ -191,7 +214,7 @@ begin
                   if ( r.bitCnt < 0 ) then
                     if ( r.lstSeen = '1' ) then
                        v.state := DON;
-                       if ( isTMS = '1' ) then
+                       if ( isTMS ) then
                           v.tms := r.sr(0);
                        else
                           v.tdi := r.sr(0);
