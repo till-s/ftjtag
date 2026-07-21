@@ -10,6 +10,7 @@ namespace ftemul {
 namespace {
 	static constexpr const uint8_t CMD_JTAG   = 0x03;
 	static constexpr const uint8_t CMD_TMS    = 0x10;
+	static constexpr const uint8_t CMD_BB     = 0x20;
 	static constexpr const uint8_t TMS_TDI_HI = 0x80;
 }
 
@@ -145,6 +146,18 @@ FW::getIDs(std::vector<uint32_t> &ids, unsigned nDevs)
 	}
 }
 
+void
+FW::setPortLevels(const uint8_t dat)
+{
+	uint8_t cmd = CMD_JTAG | CMD_BB;
+	int got;
+
+	got = fw_xfer(fw_, cmd, &dat, nullptr, 1);
+	if ( got < 0 ) {
+		throw std::system_error(-got, std::generic_category(), "fw_xfer failed");
+	}
+}
+
 ssize_t
 FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_t rsiz)
 {
@@ -182,6 +195,34 @@ FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_
 	int got;
 	if ( (got = fw_xfer_vec(fw_, cmd, tvec, tveclen, rvec, rveclen)) < 0 ) {
 		throw std::system_error(-got, std::generic_category(), "fw_xfer failed");
+	}
+	if ( 1 ){
+		size_t vi;
+		size_t ii;
+		int    tt;
+		printf("CMD: %02x\n", cmd);
+		if ( tveclen ) {
+			printf("TX: ");
+			for ( vi = 0; vi < tveclen; ++vi ) {
+				for ( ii=0; ii < tvec[vi].len; ++ii ) {
+					printf("%02x ", tvec[vi].buf[ii]);
+				}
+			}
+			printf("\n");
+		}
+		if ( rveclen ) {
+			printf("RX: ");
+			tt = 0;
+			for ( vi = 0; vi < rveclen; ++vi ) {
+				for ( ii=0; ii < rvec[vi].len; ++ii ) {
+					if ( tt < got ) {
+						printf("%02x ", rvec[vi].buf[ii]);
+					}
+					tt++;
+				}
+			}
+			printf("\n");
+		}
 	}
 	return got;
 }

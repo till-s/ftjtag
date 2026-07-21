@@ -28,6 +28,9 @@ public:
 	  return ft(tbuf, tsiz, 7, -1, rbuf, rsiz);
   }
 
+  // bit-assignment std. ftdi: 0->tck, 1->tdi, 2->tdo, 3->tms
+  void setPortLevels(uint8_t dat);
+
   void toStateReset();
 
   void toStateShiftIR(bool resetFirst = true);
