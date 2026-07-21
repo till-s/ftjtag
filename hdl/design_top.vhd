@@ -117,7 +117,6 @@ architecture rtl of design_top is
    constant LD_FIFO_OUT_C      : natural :=  9;
    constant LD_FIFO_INP_C      : natural :=  9;
 
-   -- AUD_SMPL_FREQ_C should divide the ULPI clock (60MHz)
    constant ULPI_CLK_FREQ_C    : natural := 60000000;
    constant JTAG_CLK_FREQ_C    : natural := 6000000;
    constant JTAG_HPER_C        : natural := ULPI_CLK_FREQ_C/JTAG_CLK_FREQ_C/2 - 1;
@@ -151,6 +150,7 @@ architecture rtl of design_top is
    signal acmFifoClk           : std_logic_vector(ACM_FIFO_CONFIG_C'range);
 
    signal acmFifoOverrun       : std_logic;
+   signal tdoGlitch            : std_logic;
 
    signal usb2Rst              : std_logic := '0';
    signal usb2DevStatus        : Usb2DevStatusType := USB2_DEV_STATUS_INIT_C;
@@ -190,10 +190,10 @@ architecture rtl of design_top is
    signal tmsLoc               : std_logic;
    signal tdiLoc               : std_logic;
    signal tdoLoc               : std_logic;
-   signal tckSyn               : std_logic;
-   signal tmsSyn               : std_logic;
-   signal tdiSyn               : std_logic;
-   signal tdoSyn               : std_logic;
+   signal tckSyn               : std_logic_vector(2 downto 0) := (others => '1');
+   signal tmsSyn               : std_logic_vector(2 downto 0);
+   signal tdiSyn               : std_logic_vector(2 downto 0);
+   signal tdoSyn               : std_logic_vector(2 downto 0);
 
 
 begin
@@ -333,7 +333,7 @@ begin
    ledIn(5)                  <= usb2DevStatus.suspended;
    ledIn(4)                  <= '0';
    ledIn(3)                  <= acmFifoOverrun or acmFifosOb(1).inpFull;
-   ledIn(2)                  <= '0';
+   ledIn(2)                  <= not tdoGlitch; -- green?
    ledIn(1)                  <= '0';
    ledIn(0)                  <= '0'; --gpsPps;
 
@@ -366,6 +366,7 @@ begin
    -- reconfiguration interface
    genRegRep.reconfigurable  <= '1';
    genRegRep.dbg(0)(0)       <= acmFifoOverrun;
+   genRegRep.dbg(0)(1)       <= tdoGlitch;
    cfg_ENA                   <= genRegRep.reconfigurable;
    -- initiate device disconnect from usb when reconfiguration is
    -- requested as soon as DTR drops.
@@ -384,17 +385,17 @@ begin
           datInp(1)  => tmsLoc,
           datInp(2)  => tdiLoc,
           datInp(3)  => tdoLoc,
-          datOut(0)  => tckSyn,
-          datOut(1)  => tmsSyn,
-          datOut(2)  => tdiSyn,
-          datOut(3)  => tdoSyn
+          datOut(0)  => tckSyn(0),
+          datOut(1)  => tmsSyn(0),
+          datOut(2)  => tdiSyn(0),
+          datOut(3)  => tdoSyn(0)
       );
 
    B_JTAG_LOG : block is
-      signal ltck : std_logic := '1';
       signal data : std_logic_vector(2 downto 0);
       signal vld  : std_logic := '0';
       signal ovr  : std_logic := '0';
+      signal gli  : std_logic := '0';
    begin
 
       acmFifosIb(1).outRen    <= '1';
@@ -403,11 +404,12 @@ begin
       acmFifosIb(1).inpDat(7 downto 3) <= (others => '0');
 
       acmFifoOverrun          <= ovr;
+      tdoGlitch               <= gli;
 
       P_JTAG_LOG : process ( ulpiClk ) is
       begin
          if ( rising_edge( ulpiClk ) ) then
-            ltck <= tckSyn;
+	    tckSyn(tckSyn'left downto 1) <= tckSyn(tckSyn'left - 1 downto 0);
             vld  <= '0';
             if ( acmFifosOb(1).inpFull = '1' ) then
                ovr <= '1';
@@ -415,10 +417,17 @@ begin
             if ( genRegReq.dbg(0)(0) = '1' ) then
                ovr <= '0';
             end if;
-            if ( (tckSyn and not ltck) = '1' ) then
-               data(0)   <= tmsSyn;
-               data(1)   <= tdiSyn;
-               data(2)   <= tdoSyn;
+            if ( genRegReq.dbg(0)(1) = '1' ) then
+               gli <= '0';
+            end if;
+            if ( (tckSyn(1) and not tckSyn(2)) = '1' ) then
+               if ( tdoSyn /= "111" and tdoSyn /= "000" ) then
+                  gli    <= '1';
+               end if;
+
+               data(0)   <= tmsSyn(1);
+               data(1)   <= tdiSyn(1);
+               data(2)   <= tdoSyn(1);
                vld       <= '1';
             end if;
          end if;
