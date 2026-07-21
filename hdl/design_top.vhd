@@ -410,6 +410,9 @@ begin
       begin
          if ( rising_edge( ulpiClk ) ) then
 	    tckSyn(tckSyn'left downto 1) <= tckSyn(tckSyn'left - 1 downto 0);
+	    tmsSyn(tmsSyn'left downto 1) <= tmsSyn(tmsSyn'left - 1 downto 0);
+	    tdiSyn(tdiSyn'left downto 1) <= tdiSyn(tdiSyn'left - 1 downto 0);
+	    tdoSyn(tdoSyn'left downto 1) <= tdoSyn(tdoSyn'left - 1 downto 0);
             vld  <= '0';
             if ( acmFifosOb(1).inpFull = '1' ) then
                ovr <= '1';
