@@ -357,14 +357,23 @@ begin
    ledIn(1)                  <= '0';
    ledIn(0)                  <= '0'; --gpsPps;
 
-   fpgaGpio_OUT(1)           <= tck;
+   fpgaGpio_OUT(1)           <= tck when genRegReq.scratch(1) = '1' else fpgaGpio_IN(5);
+   fpgaGpio_OE (5)           <= '0';
    fpgaGpio_OE (1)           <= not genRegReq.scratch(0);
-   fpgaGpio_OUT(2)           <= tms;
+   fpgaGpio_OUT(2)           <= tms when genRegReq.scratch(1) = '1' else fpgaGpio_IN(6);
+   fpgaGpio_OE (6)           <= '0';
    fpgaGpio_OE (2)           <= not genRegReq.scratch(0);
-   fpgaGpio_OUT(3)           <= tdi;
+   fpgaGpio_OUT(3)           <= tdi when genRegReq.scratch(1) = '1' else fpgaGpio_IN(7);
+   fpgaGpio_OE (7)           <= '0';
    fpgaGpio_OE (3)           <= not genRegReq.scratch(0);
    fpgaGpio_OE (4)           <= '0';
    tdo                       <= fpgaGpio_IN(4);
+
+   fpga_b3_io_OE (0)         <= '1';
+   fpga_b3_io_OUT(0)         <= fpgaGpio_IN(4);
+
+   fpga_b3_io_OE (1)         <= '0';
+   fpga_b3_io_OE (2)         <= '0';
 
    -- LEDs are active low
    LED                       <= not ((ledIn and not ledDiagRegs(1)) or (ledDiagRegs(1) and ledDiagRegs(0))) ;
