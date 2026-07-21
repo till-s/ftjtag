@@ -41,6 +41,7 @@ use     work.BasicPkg.Slv8Array;
 use     work.GitVersionPkg.all;
 use     work.RegPkg.all;
 use     work.GenRegPkg.all;
+use     work.Usb2ExamplePkg.all;
 
 -- differences to V1
 --
@@ -129,36 +130,27 @@ architecture rtl of design_top is
 
    constant NUM_CMDS_C         : natural := CMDS_SUPPORTED_C'length;
 
+   function ACM_FIFO_CONFIG_F(constant ldInp : natural := LD_FIFO_INP_C)
+   return Usb2MultiAcmCfgType is
+      variable v : Usb2MultiAcmCfgType;
+   begin
+      v := USB2_MULTI_ACM_CFG_DFLT_C;
+      v.ldFifoDepthInp := ldInp;
+      v.ldFifoDepthOut := LD_FIFO_OUT_C;
+      v.clkAsync       := false;
+      return v;
+   end function ACM_FIFO_CONFIG_F;
 
-   signal acmFifoOutDat        : Usb2ByteType;
-   signal acmFifoOutEmpty      : std_logic;
-   signal acmFifoOutRen        : std_logic    := '1';
-   signal acmFifoOutVld        : std_logic    := '0';
-   signal acmFifoInpDat        : Usb2ByteType := (others => '0');
-   signal acmFifoInpFull       : std_logic;
-   signal acmFifoInpWen        : std_logic    := '0';
+   constant ACM_FIFO_CONFIG_C : Usb2MultiAcmCfgArray := (
+      0 => ACM_FIFO_CONFIG_F,
+      1 => ACM_FIFO_CONFIG_F(15)
+   );
 
-   signal acmFifoInpMinFill    : unsigned(LD_FIFO_INP_C - 1 downto 0) := (others=> '0');
-   signal acmFifoInpTimer      : unsigned(32 - 1 downto 0) := (others=> '0');
+   signal acmFifosOb           : Usb2AcmFifoObArray(ACM_FIFO_CONFIG_C'range);
+   signal acmFifosIb           : Usb2AcmFifoIbArray(ACM_FIFO_CONFIG_C'range);
+   signal acmFifoClk           : std_logic_vector(ACM_FIFO_CONFIG_C'range);
 
-   signal acmFifoLocal         : std_logic    := '1';
-
-   signal acmDTR               : std_logic;
-   signal acmSelUart           : std_logic;
-   signal acmRTS               : std_logic;
-   signal acmRate              : unsigned(31 downto 0);
-   signal acmStopBits          : unsigned( 1 downto 0);
-   signal acmDataBits          : unsigned( 4 downto 0);
-   signal acmParity            : unsigned( 2 downto 0);
-
-   signal acmLineBreak         : std_logic := '0';
-   signal acmOverRun           : std_logic := '0';
-   signal acmParityError       : std_logic := '0';
-   signal acmFramingError      : std_logic := '0';
-   signal acmRingDetect        : std_logic := '0';
-   signal acmBreakState        : std_logic := '0';
-
-   signal acmFifoRst           : std_logic    := '0';
+   signal acmFifoOverrun       : std_logic;
 
    signal usb2Rst              : std_logic := '0';
    signal usb2DevStatus        : Usb2DevStatusType := USB2_DEV_STATUS_INIT_C;
@@ -173,6 +165,7 @@ architecture rtl of design_top is
    signal ulpiClkBlink         : std_logic;
 
    signal fifoWRdy             : std_logic;
+   signal fifoRVld             : std_logic;
 
    signal ledDiagRegs          : Usb2ByteArray(0 to 1) := (others => (others => '0'));
    signal ledIn                : std_logic_vector(LED'range);
@@ -193,6 +186,16 @@ architecture rtl of design_top is
    signal tdi                  : std_logic;
    signal tdo                  : std_logic;
 
+   signal tckLoc               : std_logic;
+   signal tmsLoc               : std_logic;
+   signal tdiLoc               : std_logic;
+   signal tdoLoc               : std_logic;
+   signal tckSyn               : std_logic;
+   signal tmsSyn               : std_logic;
+   signal tdiSyn               : std_logic;
+   signal tdoSyn               : std_logic;
+
+
 begin
 
    P_INI : process ( ulpiClk ) is
@@ -210,8 +213,8 @@ begin
       usb2Rst      <= rst(0);
    end process P_INI;
 
-   acmFifoOutVld <= not acmFifoOutEmpty;
-   fifoWRdy      <= not acmFifoInpFull;
+   fifoRVld <= not acmFifosOb(0).outEmpty;
+   fifoWRdy <= not acmFifosOb(0).inpFull;
 
    U_CMD : entity work.CommandWrapper
    generic map (
@@ -221,15 +224,15 @@ begin
    )
    port map (
       clk                          => ulpiClk,
-      rst                          => acmFifoRst,
+      rst                          => acmFifosOb(0).rst,
 
       boardVersion                 => BOARD_VERSION_C,
 
-      datIb                        => acmFifoOutDat,
-      vldIb                        => acmFifoOutVld,
-      rdyIb                        => acmFifoOutRen,
-      datOb                        => acmFifoInpDat,
-      vldOb                        => acmFifoInpWen,
+      datIb                        => acmFifosOb(0).outDat,
+      vldIb                        => fifoRVld,
+      rdyIb                        => acmFifosIb(0).outRen,
+      datOb                        => acmFifosIb(0).inpDat,
+      vldOb                        => acmFifosIb(0).inpWen,
       rdyOb                        => fifoWRdy,
 
       genRegOb                     => genRegReq,
@@ -288,14 +291,14 @@ begin
       ulpiClkBlink <= cnt(cnt'left);
    end process;
 
-   U_USB_DEV : entity work.Usb2ExampleDev
+   acmFifoClk <= (others => ulpiClk);
+
+   U_USB_DEV : entity work.Usb2ExampleMultiAcmDev
       generic map (
          ULPI_CLK_MODE_INP_G       => false,
          DESCRIPTORS_G             => USB2_APP_DESCRIPTORS_C,
          DESCRIPTORS_BRAM_G        => true,
-         LD_ACM_FIFO_DEPTH_INP_G   => LD_FIFO_INP_C,
-         LD_ACM_FIFO_DEPTH_OUT_G   => LD_FIFO_OUT_C,
-         CDC_ACM_ASYNC_G           => false,
+	 ACM_FIFO_CONFIG_G         => ACM_FIFO_CONFIG_C,
          ULPI_EMU_MODE_G           => NONE,
          MARK_DEBUG_ULPI_IO_G      => false,
          MARK_DEBUG_PKT_TX_G       => false,
@@ -318,32 +321,9 @@ begin
          usb2DisconnectReq         => usb2DisconnectReq,
          usb2DisconnectAck         => usb2DisconnectAck,
 
-         acmFifoClk                => ulpiClk,
-         acmFifoOutDat             => acmFifoOutDat,
-         acmFifoOutEmpty           => acmFifoOutEmpty,
-         acmFifoOutRen             => acmFifoOutRen,
-         acmFifoInpDat             => acmFifoInpDat,
-         acmFifoInpFull            => acmFifoInpFull,
-         acmFifoInpWen             => acmFifoInpWen,
-
-         acmFifoInpMinFill         => acmFifoInpMinFill,
-         acmFifoInpTimer           => acmFifoInpTimer,
-         acmFifoLocal              => acmFifoLocal,
-
-         acmDTR                    => acmDTR,
-         acmRTS                    => acmRTS,
-
-         acmRate                   => acmRate,
-         acmStopBits               => acmStopBits,
-         acmParity                 => acmParity,
-         acmDataBits               => acmDataBits,
-
-         acmLineBreak              => acmLineBreak,
-         acmOverRun                => acmOverRun,
-         acmParityError            => acmParityError,
-         acmFramingError           => acmFramingError,
-         acmRingDetect             => acmRingDetect,
-         acmBreakState             => acmBreakState
+         acmFifoClk                => acmFifoClk,
+	 acmFifoOb                 => acmFifosOb,
+	 acmFifoIb                 => acmFifosIb
       );
 
    -- mux the MDIO control endpoint between interface (driver use) and device (user/diagnostic)
@@ -352,18 +332,23 @@ begin
    ledIn(6)                  <= '0';
    ledIn(5)                  <= usb2DevStatus.suspended;
    ledIn(4)                  <= '0';
-   ledIn(3)                  <= '0';
+   ledIn(3)                  <= acmFifoOverrun or acmFifosOb(1).inpFull;
    ledIn(2)                  <= '0';
    ledIn(1)                  <= '0';
    ledIn(0)                  <= '0'; --gpsPps;
 
-   fpgaGpio_OUT(1)           <= tck when genRegReq.scratch(1) = '1' else fpgaGpio_IN(5);
+   tckLoc <= tck when genRegReq.scratch(1) = '1' else fpgaGpio_IN(5);
+   tmsLoc <= tms when genRegReq.scratch(1) = '1' else fpgaGpio_IN(6);
+   tdiLoc <= tdi when genRegReq.scratch(1) = '1' else fpgaGpio_IN(7);
+   tdoLoc <= fpgaGpio_IN(4);
+
+   fpgaGpio_OUT(1)           <= tckLoc;
    fpgaGpio_OE (5)           <= '0';
    fpgaGpio_OE (1)           <= not genRegReq.scratch(0);
-   fpgaGpio_OUT(2)           <= tms when genRegReq.scratch(1) = '1' else fpgaGpio_IN(6);
+   fpgaGpio_OUT(2)           <= tmsLoc;
    fpgaGpio_OE (6)           <= '0';
    fpgaGpio_OE (2)           <= not genRegReq.scratch(0);
-   fpgaGpio_OUT(3)           <= tdi when genRegReq.scratch(1) = '1' else fpgaGpio_IN(7);
+   fpgaGpio_OUT(3)           <= tdiLoc;
    fpgaGpio_OE (7)           <= '0';
    fpgaGpio_OE (3)           <= not genRegReq.scratch(0);
    fpgaGpio_OE (4)           <= '0';
@@ -380,11 +365,63 @@ begin
 
    -- reconfiguration interface
    genRegRep.reconfigurable  <= '1';
+   genRegRep.dbg(0)(0)       <= acmFifoOverrun;
    cfg_ENA                   <= genRegRep.reconfigurable;
    -- initiate device disconnect from usb when reconfiguration is
    -- requested as soon as DTR drops.
-   usb2DisconnectReq         <= (genRegReq.reconfigure and not acmDTR);
+   usb2DisconnectReq         <= (genRegReq.reconfigure and not acmFifosOb(0).DTR);
    -- once disconnection is complete proceed to reconfigure
    cfg_CONFIG                <= usb2DisconnectAck;
 
+   U_JTAG_SYNC : entity work.SynchronizerBit
+      generic map (
+          WIDTH_G    => 4
+      )
+      port map (
+          clk        => ulpiClk,
+          rst        => '0',
+          datInp(0)  => tckLoc,
+          datInp(1)  => tmsLoc,
+          datInp(2)  => tdiLoc,
+          datInp(3)  => tdoLoc,
+          datOut(0)  => tckSyn,
+          datOut(1)  => tmsSyn,
+          datOut(2)  => tdiSyn,
+          datOut(3)  => tdoSyn
+      );
+
+   B_JTAG_LOG : block is
+      signal ltck : std_logic := '1';
+      signal data : std_logic_vector(2 downto 0);
+      signal vld  : std_logic := '0';
+      signal ovr  : std_logic := '0';
+   begin
+
+      acmFifosIb(1).outRen    <= '1';
+      acmFifosIb(1).inpWen    <= vld;
+      acmFifosIb(1).inpDat(2 downto 0) <= data;
+      acmFifosIb(1).inpDat(7 downto 3) <= (others => '0');
+
+      acmFifoOverrun          <= ovr;
+
+      P_JTAG_LOG : process ( ulpiClk ) is
+      begin
+         if ( rising_edge( ulpiClk ) ) then
+            ltck <= tckSyn;
+            vld  <= '0';
+            if ( acmFifosOb(1).inpFull = '1' ) then
+               ovr <= '1';
+            end if;
+            if ( genRegReq.dbg(0)(0) = '1' ) then
+               ovr <= '0';
+            end if;
+            if ( (tckSyn and not ltck) = '1' ) then
+               data(0)   <= tmsSyn;
+               data(1)   <= tdiSyn;
+               data(2)   <= tdoSyn;
+               vld       <= '1';
+            end if;
+         end if;
+      end process P_JTAG_LOG;
+   end block B_JTAG_LOG;
 end architecture rtl;

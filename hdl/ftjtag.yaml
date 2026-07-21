@@ -5,4 +5,5 @@ deviceDesc:
   configurationDesc:
     # ACM is enabled by default anyways; made explicit FYI
     functionACM:
-      enabled:                true
+      - enabled:                true
+      - enabled:                true
