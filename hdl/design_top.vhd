@@ -118,7 +118,7 @@ architecture rtl of design_top is
    constant LD_FIFO_INP_C      : natural :=  9;
 
    constant ULPI_CLK_FREQ_C    : natural := 60000000;
-   constant JTAG_CLK_FREQ_C    : natural := 6000000;
+   constant JTAG_CLK_FREQ_C    : natural := 1000000;
    constant JTAG_HPER_C        : natural := ULPI_CLK_FREQ_C/JTAG_CLK_FREQ_C/2 - 1;
 
    constant CMD_JTAG_C         : natural := NUM_BASIC_CMDS_C;
