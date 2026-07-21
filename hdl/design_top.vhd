@@ -423,8 +423,14 @@ begin
             if ( genRegReq.dbg(0)(1) = '1' ) then
                gli <= '0';
             end if;
-            if ( (tckSyn(1) and not tckSyn(2)) = '1' ) then
+            if ( tckSyn = "011" ) then
                if ( tdoSyn /= "111" and tdoSyn /= "000" ) then
+                  gli    <= '1';
+               end if;
+               if ( tmsSyn /= "111" and tmsSyn /= "000" ) then
+                  gli    <= '1';
+               end if;
+               if ( tdiSyn /= "111" and tdiSyn /= "000" ) then
                   gli    <= '1';
                end if;
 
