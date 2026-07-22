@@ -38,6 +38,7 @@ use     work.Usb2EpGenericCtlPkg.all;
 use     work.Usb2AppCfgPkg.all;
 use     work.CommandMuxPkg.all;
 use     work.BasicPkg.Slv8Array;
+use     work.BasicPkg.NaturalArray;
 use     work.GitVersionPkg.all;
 use     work.RegPkg.all;
 use     work.GenRegPkg.all;
@@ -121,9 +122,17 @@ architecture rtl of design_top is
    constant JTAG_CLK_FREQ_C    : natural := 1000000;
    constant JTAG_HPER_C        : natural := ULPI_CLK_FREQ_C/JTAG_CLK_FREQ_C/2 - 1;
 
-   constant CMD_JTAG_C         : natural := NUM_BASIC_CMDS_C;
+   constant JTAG_BB_IDX_C      : natural := to_integer(unsigned(CMD_BB_SPI_ROM_C));
 
-   constant CMDS_SUPPORTED_C   : CmdsSupportedType(CMD_JTAG_C to CMD_JTAG_C) := ( others => true );
+   constant BB_HPER_DELAYS_C   : NaturalArray(0 to JTAG_BB_IDX_C) := (
+      JTAG_BB_IDX_C => (JTAG_HPER_C + 1),
+      others        => 0
+   );
+
+   constant CMD_JTAG_C         : natural := NUM_BASIC_CMDS_C;
+   constant CMD_BB_C           : natural := CMD_JTAG_C + 1;
+
+   constant CMDS_SUPPORTED_C   : CmdsSupportedType(CMD_JTAG_C to CMD_BB_C) := ( others => true );
    constant BUS_L_C            : natural := CMDS_SUPPORTED_C'high;
    constant BUS_R_C            : natural := CMDS_SUPPORTED_C'low;
 
@@ -194,6 +203,8 @@ architecture rtl of design_top is
    signal tmsSyn               : std_logic_vector(2 downto 0);
    signal tdiSyn               : std_logic_vector(2 downto 0);
    signal tdoSyn               : std_logic_vector(2 downto 0);
+   signal bbo                  : std_logic_vector(7 downto 0);
+   signal bbi                  : std_logic_vector(7 downto 0);
 
 
 begin
@@ -269,6 +280,27 @@ begin
       tdo                          => tdo
    );
 
+   U_BB : entity work.CommandBitBang
+   generic map (
+      CLOCK_FREQ_G                 => real(ULPI_CLK_FREQ_C),
+      HPER_DELAY_G                 => BB_HPER_DELAYS_C
+   )
+   port map (
+      clk                          => ulpiClk,
+      rst                          => usb2Rst,
+
+      mIb                          => bussesIb( CMD_BB_C ),
+      rIb                          => readysIb( CMD_BB_C ),
+
+      mOb                          => bussesOb( CMD_BB_C ),
+      rOb                          => readysOb( CMD_BB_C ),
+
+      subCmd                       => open,
+
+      bbo                          => bbo,
+      bbi                          => bbi
+   );
+
    ulpiDat_OUT   <= ulpiOb.dat;
    ulpiIb.dat    <= ulpiDat_IN;
    ulpiDat_OE    <= (others => ulpiDirB);
@@ -337,9 +369,26 @@ begin
    ledIn(1)                  <= '0';
    ledIn(0)                  <= '0'; --gpsPps;
 
-   tckLoc <= tck when genRegReq.scratch(1) = '1' else fpgaGpio_IN(5);
-   tmsLoc <= tms when genRegReq.scratch(1) = '1' else fpgaGpio_IN(6);
-   tdiLoc <= tdi when genRegReq.scratch(1) = '1' else fpgaGpio_IN(7);
+   P_MUX : process ( genRegReq, fpgaGpio_IN, tck, tms, tdi, bbo, tdoLoc ) is
+   begin 
+      tckLoc <= fpgaGpio_IN(5);
+      tmsLoc <= fpgaGpio_IN(6);
+      tdiLoc <= fpgaGpio_IN(7);
+      case (genRegReq.scratch(5 downto 4)) is
+         when "01" =>
+            tckLoc <= tck;
+            tmsLoc <= tms;
+            tdiLoc <= tdi;
+         when "10" =>
+            tckLoc <= bbo(3);
+            tmsLoc <= bbo(0);
+            tdiLoc <= bbo(1);
+         when others =>
+      end case;
+      bbi    <= bbo;
+      bbi(2) <= tdoLoc;
+   end process P_MUX;
+
    tdoLoc <= fpgaGpio_IN(4);
 
    fpgaGpio_OUT(1)           <= tckLoc;
