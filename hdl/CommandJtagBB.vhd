@@ -150,7 +150,8 @@ begin
             end if;
 
 	 when BB  =>
-	    mOb <= mIb;
+	    mOb        <= mIb;
+	    mOb.dat(1) <= tdo;
             if ( mIb.vld = '1' ) then
                v.tck   := mIb.dat(0);
                v.tdi   := mIb.dat(1);
