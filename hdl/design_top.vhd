@@ -206,7 +206,6 @@ architecture rtl of design_top is
    signal bbo                  : std_logic_vector(7 downto 0);
    signal bbi                  : std_logic_vector(7 downto 0);
 
-
 begin
 
    P_INI : process ( ulpiClk ) is
@@ -371,9 +370,12 @@ begin
 
    P_MUX : process ( genRegReq, fpgaGpio_IN, tck, tms, tdi, bbo, tdoLoc ) is
    begin 
-      tckLoc <= fpgaGpio_IN(5);
-      tmsLoc <= fpgaGpio_IN(6);
-      tdiLoc <= fpgaGpio_IN(7);
+      fpgaGpio_OE (5)  <= '0';
+      fpgaGpio_OE (6)  <= '0';
+      fpgaGpio_OE (7)  <= '0';
+      tckLoc           <= fpgaGpio_IN(5);
+      tmsLoc           <= fpgaGpio_IN(6);
+      tdiLoc           <= fpgaGpio_IN(7);
       case (genRegReq.scratch(5 downto 4)) is
          when "01" =>
             tckLoc <= tck;
@@ -392,13 +394,10 @@ begin
    tdoLoc <= fpgaGpio_IN(4);
 
    fpgaGpio_OUT(1)           <= tckLoc;
-   fpgaGpio_OE (5)           <= '0';
    fpgaGpio_OE (1)           <= not genRegReq.scratch(0);
    fpgaGpio_OUT(2)           <= tmsLoc;
-   fpgaGpio_OE (6)           <= '0';
    fpgaGpio_OE (2)           <= not genRegReq.scratch(0);
    fpgaGpio_OUT(3)           <= tdiLoc;
-   fpgaGpio_OE (7)           <= '0';
    fpgaGpio_OE (3)           <= not genRegReq.scratch(0);
    fpgaGpio_OE (4)           <= '0';
    tdo                       <= fpgaGpio_IN(4);
