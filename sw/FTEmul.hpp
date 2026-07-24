@@ -28,6 +28,15 @@ public:
 	  return ft(tbuf, tsiz, 7, -1, rbuf, rsiz);
   }
 
+  // each byte in TBUF contains
+  //  bit(0): tms
+  //  bit(1): tdi
+  //  bit(2): xxx
+  //  bit(3): 0  (will be used for tck)
+  //
+  //  tdo is returned in rbuf bit(2)
+  void bb(const uint8_t *tbuf, uint8_t *rbuf, size_t bufsz);
+
   // bit-assignment std. ftdi: 0->tck, 1->tdi, 2->tdo, 3->tms
   void setPortLevels(uint8_t dat);
 

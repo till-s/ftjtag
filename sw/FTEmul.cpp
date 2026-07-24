@@ -4,6 +4,7 @@
 #include <system_error>
 
 #include <termios.h>
+#include <vector>
 
 namespace ftemul {
 
@@ -12,6 +13,10 @@ namespace {
 	static constexpr const uint8_t CMD_TMS    = 0x10;
 	static constexpr const uint8_t CMD_BB     = 0x20;
 	static constexpr const uint8_t TMS_TDI_HI = 0x80;
+
+	static constexpr const uint8_t CMD_BB_SPI = 0x14;
+	static constexpr const uint8_t BB_TCK_BIT = 0x08;
+
 }
 
 FW::FW(const char *devnm)
@@ -225,6 +230,26 @@ FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_
 		}
 	}
 	return got;
+}
+
+void
+FW::bb(const uint8_t *tbuf, uint8_t *rbuf, size_t bufsz)
+{
+	std::vector<uint8_t> b;
+	b.resize( 2*bufsz );
+	for ( size_t i = 0; i < bufsz; ++i ) {
+		b[2*i + 0] = (tbuf[i] & ~BB_TCK_BIT);
+		b[2*i + 1] = (tbuf[i] |  BB_TCK_BIT);
+	}
+	int st = fw_xfer( fw_, CMD_BB_SPI, &b[0], rbuf ? &b[0] : nullptr, b.size() );
+	if ( st < 0 ) {
+		throw std::system_error(-st, std::generic_category(), "fw_xfer failed");
+	}
+	if ( rbuf ) {
+		for ( size_t i = 0; i < bufsz; ++i ) {
+			rbuf[i] = b[2*i+1];
+		}
+	}
 }
 
 
