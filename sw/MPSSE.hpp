@@ -22,7 +22,7 @@ class MPSSE {
 	FT_HANDLE ft_;
 public:
 	using Bytes = std::vector<uint8_t>;
-	MPSSE(const std::string &serialNumber, uint8_t dirMask);
+	MPSSE(const std::string &serialNumber, const std::string & description=std::string(), uint8_t dirMask = 0xb);
 	MPSSE(unsigned idx, uint8_t dirMask);
 
 	virtual uint32_t readable();
