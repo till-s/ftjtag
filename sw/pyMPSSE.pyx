@@ -1,10 +1,10 @@
-# cython: c_string_type=unicode, c_string_encoding=utf8, language=c++
+# cython: c_string_type=unicode, c_string_encoding=utf8
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libc.stdint cimport *
 cdef extern from "MPSSE.hpp" namespace "ftdi":
 	cppclass MPSSE:
-		MPSSE(const string &, const string &, uint8_t msk) except+
+		MPSSE(const string &, uint8_t msk) except+
 		MPSSE(unsigned, uint8_t msk) except+
 		void write(const vector[uint8_t] &) except+
 		void read(vector[uint8_t] &) except+
@@ -22,11 +22,7 @@ cdef class PyMPSSE:
 		c_msk = msk
 		if isinstance(ident, str):
 			sn = ident;
-			self.c_mpsse = new MPSSE(sn, "", c_msk)
-		elif isinstance(ident, list):
-			sn   = ident[0]
-			desc = ident[1]
-			self.c_mpsse = new MPSSE(sn, desc, c_msk)
+			self.c_mpsse = new MPSSE(sn, c_msk)
 		else:
 			idx = ident
 			self.c_mpsse = new MPSSE(idx, c_msk)

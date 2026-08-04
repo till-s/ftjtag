@@ -1,10 +1,5 @@
 #include <MPSSE.hpp>
-#include <cstdio>
-#include <cstring>
-#include <vector>
-#include <stdexcept>
-
-using std::vector;
+#include <stdio.h>
 
 namespace ftdi {
 
@@ -150,37 +145,10 @@ struct Init {
 
 }
 
-MPSSE::MPSSE(const std::string &serialNumber, const std::string &description, uint8_t dirMask)
+MPSSE::MPSSE(const std::string &serialNumber, uint8_t dirMask)
 {
-	FT_STATUS st;
 	FT_HANDLE ft;
-	DWORD     numDevices;
-        st = FT_CreateDeviceInfoList( &numDevices );
-	if ( FT_OK != st ) {
-		throw FTError("FT_CreateDeviceInfoList failed: ", st);
-	}
-	vector<FT_DEVICE_LIST_INFO_NODE> l;
-	l.resize(numDevices);
-
-        st = FT_GetDeviceInfoList(&l[0], &numDevices);
-	if ( FT_OK != st ) {
-		throw FTError("FT_GetDeviceInfoList failed: ", st);
-	}
-	l.resize(numDevices); // just in case
-
-	DWORD locId = -1;
-	for ( auto it = l.begin(); it != l.end(); ++it ) {
-		if ( 0 == strncmp( serialNumber.c_str(), (*it).SerialNumber, sizeof((*it).SerialNumber) ) ) {
-			if ( 0 == description.size() || strstr( (*it).Description, description.c_str() ) ) {
-				locId = (*it).LocId;
-			}
-		}
-	}
-	if ( -1 == locId ) {
-		throw std::runtime_error("Requested unit not found!");
-	}
-
-	st = FT_OpenEx( reinterpret_cast<DWORD*>(locId), FT_OPEN_BY_LOCATION, &ft);
+	FT_STATUS st = FT_OpenEx(const_cast<char*>(serialNumber.c_str()), FT_OPEN_BY_SERIAL_NUMBER, &ft);
 	if ( FT_OK != st ) {
 		throw FTError("FT_OpenEx failed: ", st);
 	}
