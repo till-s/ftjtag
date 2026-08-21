@@ -96,6 +96,18 @@ entity design_top is
       spiCSb_OE         : out   std_logic := '1';
       spiCSb_IN         : in    std_logic;
 
+         bscan_CAPTURE : in std_logic;
+         bscan_DRCK : in std_logic;
+         bscan_RESET : in std_logic;
+         bscan_RUNTEST : in std_logic;
+         bscan_SEL : in std_logic;
+         bscan_SHIFT : in std_logic;
+         bscan_TCK : in std_logic;
+         bscan_TDI : in std_logic;
+         bscan_TMS : in std_logic;
+         bscan_UPDATE : in std_logic;
+         bscan_TDO : out std_logic;
+
       -- note: fpgaGpio[0] *not* available on V2.0 board (only starting with 2.1)
       fpgaGpio_IN       : in    std_logic_vector(7 downto 1) := (others => '0');
       fpgaGpio_OUT      : out   std_logic_vector(7 downto 1) := (others => '0');
@@ -159,7 +171,7 @@ architecture rtl of design_top is
    signal acmFifoClk           : std_logic_vector(ACM_FIFO_CONFIG_C'range);
 
    signal acmFifoOverrun       : std_logic;
-   signal tdoGlitch            : std_logic;
+   signal jtagGlitch           : std_logic;
 
    signal usb2Rst              : std_logic := '0';
    signal usb2DevStatus        : Usb2DevStatusType := USB2_DEV_STATUS_INIT_C;
@@ -199,13 +211,10 @@ architecture rtl of design_top is
    signal tmsLoc               : std_logic;
    signal tdiLoc               : std_logic;
    signal tdoLoc               : std_logic;
-   signal tckSyn               : std_logic_vector(2 downto 0) := (others => '1');
-   signal tmsSyn               : std_logic_vector(2 downto 0);
-   signal tdiSyn               : std_logic_vector(2 downto 0);
-   signal tdoSyn               : std_logic_vector(2 downto 0);
    signal bbo                  : std_logic_vector(7 downto 0);
    signal bbi                  : std_logic_vector(7 downto 0);
 
+   alias foo is << signal U_USB_DEV.G_EP_CDCACM(0).U_CDCACM.U_FIFO.G_OUT_FIFO.fifoFilled : unsigned(9 downto 0) >>;
 begin
 
    P_INI : process ( ulpiClk ) is
@@ -364,7 +373,7 @@ begin
    ledIn(5)                  <= usb2DevStatus.suspended;
    ledIn(4)                  <= '0';
    ledIn(3)                  <= acmFifoOverrun or acmFifosOb(1).inpFull;
-   ledIn(2)                  <= not tdoGlitch; -- green?
+   ledIn(2)                  <= not jtagGlitch; -- green?
    ledIn(1)                  <= '0';
    ledIn(0)                  <= '0'; --gpsPps;
 
@@ -414,7 +423,7 @@ begin
    -- reconfiguration interface
    genRegRep.reconfigurable  <= '1';
    genRegRep.dbg(0)(0)       <= acmFifoOverrun;
-   genRegRep.dbg(0)(1)       <= tdoGlitch;
+   genRegRep.dbg(0)(1)       <= jtagGlitch;
    cfg_ENA                   <= genRegRep.reconfigurable;
    -- initiate device disconnect from usb when reconfiguration is
    -- requested as soon as DTR drops.
@@ -422,72 +431,23 @@ begin
    -- once disconnection is complete proceed to reconfigure
    cfg_CONFIG                <= usb2DisconnectAck;
 
-   U_JTAG_SYNC : entity work.SynchronizerBit
-      generic map (
-          WIDTH_G    => 4
-      )
+   U_JTAG_LOG  : entity work.JtagLogger
       port map (
-          clk        => ulpiClk,
-          rst        => '0',
-          datInp(0)  => tckLoc,
-          datInp(1)  => tmsLoc,
-          datInp(2)  => tdiLoc,
-          datInp(3)  => tdoLoc,
-          datOut(0)  => tckSyn(0),
-          datOut(1)  => tmsSyn(0),
-          datOut(2)  => tdiSyn(0),
-          datOut(3)  => tdoSyn(0)
+         clk            => ulpiClk,
+         rst            => '0',
+         tck            => tckLoc,
+         tms            => tmsLoc,
+         tdi            => tdiLoc,
+         tdo            => tdoLoc,
+         dataOut        => acmFifosIb(1).inpDat,
+         dataVld        => acmFifosIb(1).inpWen,
+         full           => acmFifosOb(1).inpFull,
+         overrun        => acmFifoOverrun,
+         overrunClr     => genRegReq.dbg(0)(0),
+         glitch         => jtagGlitch,
+         glitchClr      => genRegReq.dbg(0)(1)
       );
 
-   B_JTAG_LOG : block is
-      signal data : std_logic_vector(2 downto 0);
-      signal vld  : std_logic := '0';
-      signal ovr  : std_logic := '0';
-      signal gli  : std_logic := '0';
-   begin
+   acmFifosIb(1).outRen             <= '1';
 
-      acmFifosIb(1).outRen    <= '1';
-      acmFifosIb(1).inpWen    <= vld;
-      acmFifosIb(1).inpDat(2 downto 0) <= data;
-      acmFifosIb(1).inpDat(7 downto 3) <= (others => '0');
-
-      acmFifoOverrun          <= ovr;
-      tdoGlitch               <= gli;
-
-      P_JTAG_LOG : process ( ulpiClk ) is
-      begin
-         if ( rising_edge( ulpiClk ) ) then
-	    tckSyn(tckSyn'left downto 1) <= tckSyn(tckSyn'left - 1 downto 0);
-	    tmsSyn(tmsSyn'left downto 1) <= tmsSyn(tmsSyn'left - 1 downto 0);
-	    tdiSyn(tdiSyn'left downto 1) <= tdiSyn(tdiSyn'left - 1 downto 0);
-	    tdoSyn(tdoSyn'left downto 1) <= tdoSyn(tdoSyn'left - 1 downto 0);
-            vld  <= '0';
-            if ( acmFifosOb(1).inpFull = '1' ) then
-               ovr <= '1';
-            end if;
-            if ( genRegReq.dbg(0)(0) = '1' ) then
-               ovr <= '0';
-            end if;
-            if ( genRegReq.dbg(0)(1) = '1' ) then
-               gli <= '0';
-            end if;
-            if ( tckSyn = "011" ) then
-               if ( tdoSyn /= "111" and tdoSyn /= "000" ) then
-                  gli    <= '1';
-               end if;
-               if ( tmsSyn /= "111" and tmsSyn /= "000" ) then
-                  gli    <= '1';
-               end if;
-               if ( tdiSyn /= "111" and tdiSyn /= "000" ) then
-                  gli    <= '1';
-               end if;
-
-               data(0)   <= tmsSyn(1);
-               data(1)   <= tdiSyn(1);
-               data(2)   <= tdoSyn(1);
-               vld       <= '1';
-            end if;
-         end if;
-      end process P_JTAG_LOG;
-   end block B_JTAG_LOG;
 end architecture rtl;
