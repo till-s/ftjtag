@@ -20,7 +20,7 @@ public:
 
 class JtagAna;
 
-class VirtualFTDI : public VirtualUSBDevice {
+class VirtualFTDIDevice : public VirtualUSBDevice {
 
 	struct Channel {
 		static constexpr const uint8_t           MODE_MPSSE = 0x02;
@@ -41,7 +41,7 @@ class VirtualFTDI : public VirtualUSBDevice {
 	std::vector<Channel> _channels;
 	
 public:
-	VirtualFTDI(const VirtualUSBDevice::Info &info)
+	VirtualFTDIDevice(const VirtualUSBDevice::Info &info)
 		: VirtualUSBDevice(info)
 	{
 	}

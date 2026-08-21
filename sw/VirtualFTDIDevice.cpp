@@ -1,4 +1,4 @@
-#include <VirtualFTDI.hpp>
+#include <VirtualFTDIDevice.hpp>
 #ifdef HAVE_ANA
 #include <JtagAna.hpp>
 #endif
@@ -29,7 +29,7 @@ checkTapState(std::shared_ptr<JtagAna> ana, uint8_t ftcmd)
 #endif
 
 void 
-VirtualFTDI::handleXferEP0(VirtualUSBDevice::Xfer&& xfer) {
+VirtualFTDIDevice::handleXferEP0(VirtualUSBDevice::Xfer&& xfer) {
     const USB::SetupRequest req = xfer.setupReq;
     //const uint8_t* payload = xfer.data.get();
     //const size_t payloadLen = xfer.len;
@@ -122,14 +122,14 @@ VirtualFTDI::handleXferEP0(VirtualUSBDevice::Xfer&& xfer) {
 }
 
 void
-VirtualFTDI::Channel::mustbeMPSSE() {
+VirtualFTDIDevice::Channel::mustbeMPSSE() {
 	if ( gMode != MODE_MPSSE ) {
 		throw RuntimeError("Device in mode 0x%02x; not supported -- SKIPPING\n", gMode);
 	}
 }
 
 void 
-VirtualFTDI::handleXferEPX(VirtualUSBDevice::Xfer&& xfer) {
+VirtualFTDIDevice::handleXferEPX(VirtualUSBDevice::Xfer&& xfer) {
     std::vector<uint8_t> rep;
     size_t  cmdsz = 0;
     // apparently, any reply starts with modem + line-status
@@ -429,7 +429,7 @@ VirtualFTDI::handleXferEPX(VirtualUSBDevice::Xfer&& xfer) {
 }
 
 void
-VirtualFTDI::handleXfer(VirtualUSBDevice::Xfer&& xfer) {
+VirtualFTDIDevice::handleXfer(VirtualUSBDevice::Xfer&& xfer) {
     // Endpoint 0
     if (xfer.ep == 0) handleXferEP0(std::move(xfer));
     // Other endpoints
@@ -455,37 +455,37 @@ static const EndpointDescriptor *scanForEPDesc(const ConfigurationDescriptor *d,
 }
 
 void
-VirtualFTDI::addChannel(std::shared_ptr<FTInterface> ft, uint8_t epOut, uint8_t epIn, std::shared_ptr<JtagAna> ana)
+VirtualFTDIDevice::addChannel(std::shared_ptr<FTInterface> ft, uint8_t epOut, uint8_t epIn, std::shared_ptr<JtagAna> ana)
 {
 	auto l = getLock();
 	if ( _State::Idle != getState() ) {
-		throw RuntimeError("VirtualFTDI::addChannel can only be called on an idle device");
+		throw RuntimeError("VirtualFTDIDevice::addChannel can only be called on an idle device");
 	}
 	if ( !! (epOut & USB::Endpoint::DirectionIn) ) {
-		throw RuntimeError("VirtualFTDI::addChannel OUT-endpoint has wrong direction!?");
+		throw RuntimeError("VirtualFTDIDevice::addChannel OUT-endpoint has wrong direction!?");
 	}
 	if ( ! (epIn  & USB::Endpoint::DirectionIn) ) {
-		throw RuntimeError("VirtualFTDI::addChannel IN-endpoint has wrong direction!?");
+		throw RuntimeError("VirtualFTDIDevice::addChannel IN-endpoint has wrong direction!?");
 	}
 	if ( _info.configDescsCount != 1 ) {
-		throw RuntimeError("VirtualFTDI::addChannel multiple configurations not supported ATM");
+		throw RuntimeError("VirtualFTDIDevice::addChannel multiple configurations not supported ATM");
 		// would have to wait until a configuration is selected
 	}
 	Channel ch;
 	ch.ft       = ft;
 	ch.ana      = ana;
 	if ( ! (ch.epIn = scanForEPDesc(_info.configDescs[0], epIn)) ) {
-		throw RuntimeError("VirtualFTDI::addChannel EP 0x%02x not found in descriptors\n", epIn);
+		throw RuntimeError("VirtualFTDIDevice::addChannel EP 0x%02x not found in descriptors\n", epIn);
 	}
 	if ( ! (ch.epOut = scanForEPDesc(_info.configDescs[0], epOut)) ) {
-		throw RuntimeError("VirtualFTDI::addChannel EP 0x%02x not found in descriptors\n", epIn);
+		throw RuntimeError("VirtualFTDIDevice::addChannel EP 0x%02x not found in descriptors\n", epIn);
 	}
 	ch.loopback = !ft; 
 	_channels.push_back(ch);
 }
 
 void
-VirtualFTDI::run() {
+VirtualFTDIDevice::run() {
     for (;;) {
         VirtualUSBDevice::Xfer data = *read();
         handleXfer(std::move(data));
@@ -499,7 +499,7 @@ VirtualFTDI::run() {
 }
 
 size_t
-VirtualFTDI::_reply(const _Cmd& cmd, const void *data, size_t len, int32_t status) {
+VirtualFTDIDevice::_reply(const _Cmd& cmd, const void *data, size_t len, int32_t status) {
     // The FTDI sends modem status at the beginning of each USB packet; If 'len'
     // spans multiple packets we must insert the modem status because libftd2xx removes
     // it.

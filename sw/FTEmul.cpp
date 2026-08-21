@@ -49,7 +49,7 @@ FW::x(const Bytes &req, Bytes &rep, bool tms)
 	rvec[0].len = rep.size();
 	if ( dbg_ > 0 ) {
 		printf("sending OUT %zd\n", req.size());
-		for (int i = 0; i < req.size(); ++i ) {
+		for (size_t i = 0; i < req.size(); ++i ) {
 			printf("0x%02x\n", req[i]);
 		}
 	}
@@ -59,7 +59,7 @@ FW::x(const Bytes &req, Bytes &rep, bool tms)
 	rep.resize(st);
 	if ( dbg_ > 0 ) {
 		printf("transferred IN %d\n", st);
-		for (int i = 0; i < rep.size(); ++i ) {
+		for (size_t i = 0; i < rep.size(); ++i ) {
 			printf("0x%02x\n", rep[i]);
 		}
 	}

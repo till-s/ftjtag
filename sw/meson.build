@@ -1,5 +1,5 @@
 project( 'VirtualFTDI', ['c', 'cpp'] )
-# 'ftdi/linux-x86_64',
+
 inc = include_directories(['../modules/VirtualUSBDevice/Src', '../modules/VirtualUSBDevice/Lib', '../modules/acm-toolbox/sw', '../modules/jtag-utils/sw'])
 
 udev = meson.get_compiler('cpp').find_library('udev')
