@@ -10,8 +10,9 @@ using Bytes = std::vector<uint8_t>;
 
 class FW {
   FWInfo *fw_;
+  int    dbg_{0};
 public:
-  FW(const char *devnm);
+  FW(const char *devnm, int dbg = 0);
 
   void printVersion();
 
@@ -42,11 +43,15 @@ public:
 
   void toStateReset();
 
-  void toStateShiftIR(bool resetFirst = true);
+  void toStateRunTestIdle();
+
+  void toStateShiftIR(bool toRTIFirst = true);
 
   unsigned countChainLength();
 
-  void toStateShiftDR(bool resetFirst = true);
+  void toStateShiftDR(bool toRTIFirst = true);
+
+  ssize_t shiftToRunTestIdle(const uint8_t *tbuf, size_t tsiz, int bits, uint8_t *rbuf, size_t rsiz);
 
   void getIDs(std::vector<uint32_t> &ids, unsigned nDevs = 1);
 

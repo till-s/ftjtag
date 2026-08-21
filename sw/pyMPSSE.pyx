@@ -1,16 +1,23 @@
 # cython: c_string_type=unicode, c_string_encoding=utf8
 from libcpp.string cimport string
 from libcpp.vector cimport vector
-from libc.stdint cimport *
+from libc.stdint   cimport *
+from libc.stdio    cimport *
 cdef extern from "MPSSE.hpp" namespace "ftdi":
 	cppclass MPSSE:
 		MPSSE(const string &, uint8_t msk) except+
 		MPSSE(unsigned, uint8_t msk) except+
 		void write(const vector[uint8_t] &) except+
-		void read(vector[uint8_t] &) except+
+		void read(vector[uint8_t] &, size_t l) except+
 		uint32_t readable() except+
 		void purge() except+
 		void loopback(bool) except+
+
+cdef extern from "MPSSE.hpp" namespace "ftdi":
+	void c_printInfoList "ftdi::MPSSE::printInfoList" (FILE *f) except+
+
+def printInfoList():
+	c_printInfoList(NULL)
 
 cdef class PyMPSSE:
 	cdef MPSSE *c_mpsse
@@ -35,7 +42,12 @@ cdef class PyMPSSE:
 
 	def read(self):
 		cdef vector[uint8_t] buf
-		self.c_mpsse.read(buf)
+		self.c_mpsse.read(buf, 0)
+		return buf
+
+	def mustRead(self, l):
+		cdef vector[uint8_t] buf
+		self.c_mpsse.read(buf, l)
 		return buf
 
 	def readable(self):

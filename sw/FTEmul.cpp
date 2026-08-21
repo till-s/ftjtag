@@ -19,7 +19,8 @@ namespace {
 
 }
 
-FW::FW(const char *devnm)
+FW::FW(const char *devnm, int dbg)
+: dbg_(dbg)
 {
 	if ( ! ( fw_ = fw_open(devnm, B115200) ) ) {
 		throw std::runtime_error("unable to open device");
@@ -35,6 +36,7 @@ FW::printVersion()
 	printf("FUN 0x%02" PRIx8  "\n", fw_get_api_function(fw_));
 }
 
+// returns #bits in 1st byte
 void
 FW::x(const Bytes &req, Bytes &rep, bool tms)
 {
@@ -45,13 +47,21 @@ FW::x(const Bytes &req, Bytes &rep, bool tms)
 	tvec[0].len = req.size();
 	rvec[0].buf = &rep[0];
 	rvec[0].len = rep.size();
+	if ( dbg_ > 0 ) {
+		printf("sending OUT %zd\n", req.size());
+		for (int i = 0; i < req.size(); ++i ) {
+			printf("0x%02x\n", req[i]);
+		}
+	}
 	if ( (st = fw_xfer_vec(fw_, (tms ? (CMD_JTAG | CMD_TMS) : CMD_JTAG), tvec, req.size() > 0 ? 1 : 0, rvec, rep.size() > 0 ? 1 : 0)) < 0 ) {
 		throw std::system_error(-st, std::generic_category(), "fw_xfer failed");
 	}
 	rep.resize(st);
-	printf("transferred %d\n", st);
-	for (int i = 0; i < st; ++i ) {
-		printf("0x%02x\n", rep[i]);
+	if ( dbg_ > 0 ) {
+		printf("transferred IN %d\n", st);
+		for (int i = 0; i < rep.size(); ++i ) {
+			printf("0x%02x\n", rep[i]);
+		}
 	}
 }
 
@@ -66,15 +76,26 @@ FW::toStateReset()
 }
 
 void
+FW::toStateRunTestIdle()
+{
+	Bytes req, rep;
+	// RESET -> RUN_TEST_IDLE
+	req.push_back(0x07);
+	req.push_back(0x7f);
+	x(req, rep, true);
+}
+
+
+void
 FW::toStateShiftIR(bool resetFirst)
 {
 	if ( resetFirst ) {
-		toStateReset();
+		toStateRunTestIdle();
 	}
 	Bytes req, rep;
 	// goto SHIFT-IR
-	req.push_back(0x04);
-	req.push_back(0x06);
+	req.push_back(0x03);
+	req.push_back(0x03);
 	x(req, rep, true);
 }
 
@@ -121,11 +142,11 @@ void
 FW::toStateShiftDR(bool resetFirst)
 {
 	if ( resetFirst ) {
-		toStateReset();
+		toStateRunTestIdle();
 	}
 	Bytes req, rep;
-	req.push_back(0x03);
 	req.push_back(0x02);
+	req.push_back(0x01);
 	x(req,rep,true);
 }
 
@@ -166,6 +187,9 @@ FW::setPortLevels(const uint8_t dat)
 ssize_t
 FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_t rsiz)
 {
+	if ( tsiz && rsiz && (rsiz != tsiz) ) {
+		throw std::system_error(-EINVAL, std::generic_category(), "ft: tsiz/rsiz mismatch");
+	}
 	uint8_t cmd = CMD_JTAG;
 	uint8_t len = (bits & 0x07);
 	if ( tms >= 0 ) {
@@ -201,7 +225,7 @@ FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_
 	if ( (got = fw_xfer_vec(fw_, cmd, tvec, tveclen, rvec, rveclen)) < 0 ) {
 		throw std::system_error(-got, std::generic_category(), "fw_xfer failed");
 	}
-	if ( 1 ){
+	if ( dbg_ > 0 ) {
 		size_t vi;
 		size_t ii;
 		int    tt;
@@ -230,6 +254,44 @@ FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_
 		}
 	}
 	return got;
+}
+
+ssize_t
+FW::shiftToRunTestIdle(const uint8_t *tbuf, size_t tsiz, int bits, uint8_t *rbuf, size_t rsiz)
+{
+	if ( tsiz && rsiz && (tsiz != rsiz) ) {
+		throw std::system_error(-EINVAL, std::generic_category(), "ft: tsiz/rsiz mismatch");
+	}
+	if ( !tsiz && !rsiz ) {
+		return 0;
+	}
+	size_t  tsiz1   = tsiz;
+	size_t  rsiz1   = rsiz;
+	int     lasttdi = (tsiz ? (tbuf[tsiz - 1] >> bits) : 0) & 1;
+	if ( 0 == bits ) {
+		tsiz1 = tsiz1 ? tsiz1 - 1 : 0;
+		rsiz1 = rsiz1 ? rsiz1 - 1 : 0;
+		bits  = 7;
+	} else {
+		bits--;
+	}
+	size_t got = ft(tbuf, tsiz1, bits, -1, rbuf, rsiz1);
+	if ( got < 0 ) {
+		return got;
+	}
+	uint8_t toRTI = 0x03; // TMS: 1->1->0
+	uint8_t rxdat;
+	int     txbits = 3 - 1;
+
+	got = ft(&toRTI, 1, txbits, lasttdi, &rxdat, 1);
+	if ( got < 0 ) {
+		return got;
+	}
+	if ( rsiz ) {
+	        uint8_t lastTDOBit = (rxdat << txbits) & 0x80;
+		rbuf[rsiz - 1] = (lastTDOBit | (rbuf[rsiz - 1] >> 1));
+	}
+	return rsiz;
 }
 
 void

@@ -107,7 +107,7 @@ struct Init {
 		if ( FT_OK != st ) {
 			throw FTError("FT_SetChars failed: ", st);
 		}
-		st = FT_SetLatencyTimer(ft_, 16);
+		st = FT_SetLatencyTimer(ft_, 1);
 		if ( FT_OK != st ) {
 			throw FTError("FT_LatencyTimer failed: ", st);
 		}
@@ -143,6 +143,39 @@ struct Init {
 	}
 };
 
+}
+
+void
+MPSSE::printInfoList(FILE *f)
+{
+	DWORD numDevs;
+	FT_STATUS st = FT_CreateDeviceInfoList(&numDevs);
+	if ( FT_OK != st ) {
+		throw FTError("FT_CreateDeviceInfoList failed: ", st);
+	}
+	if ( ! f ) {
+		f = stdout;
+	}
+	fprintf(f, "%d devices found\n", numDevs);
+	std::vector<FT_DEVICE_LIST_INFO_NODE> info;
+	info.resize(numDevs);
+	st = FT_GetDeviceInfoList( &info[0], &numDevs );
+	if ( FT_OK != st ) {
+		throw FTError("FT_GetDevInfoList failed: ", st);
+	}
+	for ( DWORD it = 0;  it < numDevs; ++it ) {
+		fprintf(f, "FT-Device #%d:\n", it);
+		if ( !!(info[it].Flags & FT_FLAGS_OPENED) ) {
+			fprintf(f, "-> device open; no further info available\n");
+		} else {
+			fprintf(f, "  Flags:      0x%04x\n", info[it].Flags);
+			fprintf(f, "  Type :      0x%04x\n", info[it].Type);
+			fprintf(f, "  ID   :      0x%08x\n", info[it].ID);
+			fprintf(f, "  LocId:      0x%08x\n", info[it].LocId);
+			fprintf(f, "  SerNo:      %s\n",     info[it].SerialNumber);
+			fprintf(f, "  Descr:      %s\n",     info[it].Description);
+		}
+	}
 }
 
 MPSSE::MPSSE(const std::string &serialNumber, uint8_t dirMask)
@@ -188,22 +221,38 @@ MPSSE::readable()
 }
 
 void
-MPSSE::read(Bytes &buf)
+MPSSE::read(Bytes &buf, size_t l)
 {
-	uint32_t got = readable();
+	uint32_t got = (l > 0 ? l : readable());
+	buf.resize(got);
+	if ( got > 0 ) {
+		FT_STATUS st = FT_Read(ft_, &buf[0], got, &got);
+		if ( FT_OK != st ) {
+			throw FTError("FT_Read failed: ", st);
+		}
+	}
+	buf.resize(got);
+}
+	
+size_t
+MPSSE::read(uint8_t *buf, size_t sz, size_t l)
+{
+	uint32_t got = (l > 0 ? readable() : l);
 
 	FT_STATUS st;
 
-	buf.resize(got);
+	if ( got > sz ) {
+		got = sz;
+	}
 
 	if ( got > 0 ) {
-		st = FT_Read(ft_, &buf[0], got, &got);
+		st = FT_Read(ft_, buf, got, &got);
 		if ( FT_OK != st ) {
 			throw FTError("FT_Read failed: ", st);
 		}
 	}
 
-	buf.resize(got);
+	return got;
 }
 
 void
@@ -218,12 +267,18 @@ MPSSE::purge()
 void
 MPSSE::write(const Bytes &buf)
 {
+	write( const_cast<uint8_t*>( &buf[0]), buf.size() );
+}
+
+void
+MPSSE::write(const uint8_t *buf, size_t sz)
+{
 	uint32_t put;
-	FT_STATUS st = FT_Write(ft_, const_cast<uint8_t*>( &buf[0] ), buf.size(), &put);
+	FT_STATUS st = FT_Write(ft_, const_cast<uint8_t*>( buf ), sz, &put);
 	if ( FT_OK != st ) {
 		throw FTError("FT_Read failed: ", st);
 	}
-	if ( put != buf.size() ) {
+	if ( put != sz ) {
 		throw FTError("FT_Write incomplete - not all data written");
 	}
 }
