@@ -59,7 +59,7 @@ We can now either relink libftd2xx.so to point to libmock.so or `LD_PREOAD` it, 
 JRSTN goes hi on negative edge of TCK after leaving `TEST_LOGIC_RESET`;
       goes low in falling edge after entering this state (or initially)
 JTCK -> mirror of TCK (seems not gated)
-JTDI -> mirror of TDI 
+JTDI -> seems TDI sampled at rising edge of TCK
 
 going into `TEST_LOGIC_RESET` does *not* change the current instruction!
 Initial instruction after FPGA config is 0x00; TLR does not change bypass
@@ -69,7 +69,7 @@ setting instruction to 0x32 (ER1)
 -> JSHIFT asserts when in SHIFT state
 -> JUPDATE asserts when in UPDATE state
 -> JCE2 not asserted
-shifting 0 into DR -> DR out is 0x00000006; 3 lsbits seems stick (0x6)
+shifting 0 into DR -> DR out is 0x00000006; 3 lsbits seems stuck (0x6)
 
 shift IR: old instruction is shifted out JSHIFT, JUPDATE not asserted
 
@@ -85,4 +85,4 @@ are appended while shifting more bits. JSHIFT/JUPDATE/JCE2 are still asserted bu
 Repeating pattern of 8-bytes: 0x0000 0000 0000 0043.
 If ER data register is 0x000006 (nothing selected) zeroes are shifted out.
 
-`ER_TDO` changes state on negative TCK; seems to be registered on rising edge and propagated to TDO on falling edge
+`ER_TDO` changes state on negative TCK; seems to be `ER2_TDO`, registered on negative edge.
