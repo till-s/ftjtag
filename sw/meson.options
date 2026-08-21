@@ -1,0 +1,2 @@
+option('with-python', type : 'boolean', description: 'build python bindings', value: false)
+option('libftd2xx-dir', type: 'string', description: 'where to look for libftd2xx')
