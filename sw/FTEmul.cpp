@@ -12,6 +12,8 @@ namespace {
 	static constexpr const uint8_t CMD_JTAG   = 0x03;
 	static constexpr const uint8_t CMD_TMS    = 0x10;
 	static constexpr const uint8_t CMD_BB     = 0x20;
+	static constexpr const uint8_t CMD_TDI_WO = 0x30;
+	static constexpr const uint8_t CMD_TDI_RO = 0x40;
 	static constexpr const uint8_t TMS_TDI_HI = 0x80;
 
 	static constexpr const uint8_t CMD_BB_SPI = 0x14;
@@ -211,15 +213,24 @@ FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_
 		tvec[tveclen].len = tsiz;
 		tveclen++;
 	} else {
-		empty.resize(rsiz);
-		tvec[tveclen].buf = &empty[0];
-		tvec[tveclen].len = rsiz;
-		tveclen++;
+		if ( 7 == bits && tms < 0 ) {
+			cmd |= CMD_TDI_RO;
+		} else
+		{
+			empty.resize(rsiz);
+			tvec[tveclen].buf = &empty[0];
+			tvec[tveclen].len = rsiz;
+			tveclen++;
+		}
 	}
 	if ( rbuf && rsiz > 0 ) {
 		rvec[rveclen].buf = rbuf;
 		rvec[rveclen].len = rsiz;
 		rveclen++;
+	} else {
+		if ( 7 == bits && tms < 0 ) {
+			cmd |= CMD_TDI_WO;
+		}
 	}
 	int got;
 	if ( (got = fw_xfer_vec(fw_, cmd, tvec, tveclen, rvec, rveclen)) < 0 ) {
