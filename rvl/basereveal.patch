@@ -1,0 +1,23 @@
+# Patch basereveal.bdk XML file to execute 'istflow.sh' script
+# instead of 'istflow'. 'istflow' modifies the top-level HDL
+# inserting debug cores; we use the 'istflow.sh' script to perform
+# some editing after 'istflow' has done it's work.
+*** /opt/lscc/radiant/2025.2/data/basereveal.bdk.orig	2026-07-09 13:25:05.303373262 +0200
+--- /opt/lscc/radiant/2025.2/data/basereveal.bdk	2026-07-09 14:52:47.604651287 +0200
+***************
+*** 57,63 ****
+      <scripts>reveal_rvp.tcl</scripts>
+    </CommandDef>
+    <CommandDef id="Cmd_Reveal" sc_type="CMD_TCL_SCRIPT" type="CMD_EXTERNAL_ENGINE_NEWMSG">
+!     <cmd_str>istflow -prj "${implementation.Reveal.absolutefilepath}" -design "${report_base}.rvp" </cmd_str>
+  	<scripts>
+  	  <![CDATA[
+            proc istflow {args} {
+--- 57,63 ----
+      <scripts>reveal_rvp.tcl</scripts>
+    </CommandDef>
+    <CommandDef id="Cmd_Reveal" sc_type="CMD_TCL_SCRIPT" type="CMD_EXTERNAL_ENGINE_NEWMSG">
+!     <cmd_str>istflow.sh -prj "${implementation.Reveal.absolutefilepath}" -design "${report_base}.rvp" </cmd_str>
+  	<scripts>
+  	  <![CDATA[
+            proc istflow {args} {
