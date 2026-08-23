@@ -9,8 +9,8 @@
 	url = git@github.com:till-s/efx-scripts.git
 [submodule "modules/jtag-utils"]
 	path = modules/jtag-utils
-	url = git@github.com:till-s/jtag-utils.git
+	url = ./modules/jtag-utils/
 [submodule "modules/VirtualUSBDevice"]
 	path = modules/VirtualUSBDevice
-	url = git@github.com:till-s/VirtualUSBDevice
+	url = ./modules/VirtualUSBDevice/
 	branch = stti_feature
