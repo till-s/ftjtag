@@ -178,9 +178,10 @@ void
 FW::setPortLevels(const uint8_t dat)
 {
 	uint8_t cmd = CMD_JTAG | CMD_BB;
+	uint8_t unused;
 	int got;
 
-	got = fw_xfer(fw_, cmd, &dat, nullptr, 1);
+	got = fw_xfer(fw_, cmd, &dat, &unused, 1);
 	if ( got < 0 ) {
 		throw std::system_error(-got, std::generic_category(), "fw_xfer failed");
 	}
@@ -228,9 +229,20 @@ FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_
 		rvec[rveclen].len = rsiz;
 		rveclen++;
 	} else {
+		// empty has been used if tsiz == 0 and rsiz > 0
+		// which is not possible in this branch; thus
+		// we may use empty here
 		if ( 7 == bits && tms < 0 ) {
 			cmd |= CMD_TDI_WO;
+			// a dummy byte is returned once the transfer is done
+			rvec[rveclen].len = 1;
+		} else {
+			empty.resize(tsiz);
+			rvec[rveclen].len = tsiz;
 		}
+		empty.resize(rvec[rveclen].len);
+		rvec[rveclen].buf = &empty[0];
+		rveclen++;
 	}
 	int got;
 	if ( (got = fw_xfer_vec(fw_, cmd, tvec, tveclen, rvec, rveclen)) < 0 ) {
