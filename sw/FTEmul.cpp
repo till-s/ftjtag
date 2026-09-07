@@ -43,19 +43,26 @@ void
 FW::x(const Bytes &req, Bytes &rep, bool tms)
 {
 	int st;
+	Bytes discard;
 	tbufvec tvec[1];
 	rbufvec rvec[1];
 	tvec[0].buf = &req[0];
 	tvec[0].len = req.size();
-	rvec[0].buf = &rep[0];
-	rvec[0].len = rep.size();
+	if ( rep.size() ) {
+		rvec[0].buf = &rep[0];
+		rvec[0].len = rep.size();
+	} else {
+		discard.resize(req.size());
+		rvec[0].buf = &discard[0];
+		rvec[0].len = discard.size();
+	}
 	if ( dbg_ > 0 ) {
 		printf("sending OUT %zd\n", req.size());
 		for (size_t i = 0; i < req.size(); ++i ) {
 			printf("0x%02x\n", req[i]);
 		}
 	}
-	if ( (st = fw_xfer_vec(fw_, (tms ? (CMD_JTAG | CMD_TMS) : CMD_JTAG), tvec, req.size() > 0 ? 1 : 0, rvec, rep.size() > 0 ? 1 : 0)) < 0 ) {
+	if ( (st = fw_xfer_vec(fw_, (tms ? (CMD_JTAG | CMD_TMS) : CMD_JTAG), tvec,  1 , rvec,  1)) < 0 ) {
 		throw std::system_error(-st, std::generic_category(), "fw_xfer failed");
 	}
 	rep.resize(st);
