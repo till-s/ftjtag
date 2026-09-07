@@ -14,3 +14,6 @@
 	path = modules/VirtualUSBDevice
 	url = ./modules/VirtualUSBDevice/
 	branch = stti_feature
+[submodule "modules/cobs"]
+	path = modules/cobs
+	url = git@github.com:till-s/cobs

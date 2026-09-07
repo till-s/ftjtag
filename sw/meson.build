@@ -1,10 +1,12 @@
 project( 'VirtualFTDI', ['c', 'cpp', 'cython'], meson_version: '>=1.1' )
 
-inc = include_directories(['../modules/VirtualUSBDevice/Src', '../modules/VirtualUSBDevice/Lib', '../modules/acm-toolbox/sw', '../modules/jtag-utils/sw'])
+add_global_arguments( '-DCONFIG_WITH_COBS', language: ['c','cpp'] )
+
+inc = include_directories(['../modules/VirtualUSBDevice/Src', '../modules/VirtualUSBDevice/Lib', '../modules/acm-toolbox/sw', '../modules/jtag-utils/sw', '../modules/cobs/sw'])
 
 udev = meson.get_compiler('cpp').find_library('udev')
 
-acm_toolbox_srcs = ['../modules/acm-toolbox/sw/fwComm.c', '../modules/acm-toolbox/sw/cmdXfer.c', ]
+acm_toolbox_srcs = ['../modules/acm-toolbox/sw/fwComm.c', '../modules/acm-toolbox/sw/cmdXfer.c', '../modules/cobs/sw/cobsC.c']
 
 srcs = ['VirtualFTDI.cpp', 'VirtualFTDIDevice.cpp', '../modules/VirtualUSBDevice/Src/USBIPLib.cpp', '../modules/jtag-utils/sw/JtagTap.cpp', '../modules/jtag-utils/sw/JtagAna.cpp', '../sw/FTEmul.cpp'] + acm_toolbox_srcs
 
