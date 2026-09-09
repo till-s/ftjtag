@@ -67,7 +67,7 @@ architecture sim of CommandWrapperSim is
    signal   bussesOb          : SimpleBusMstArray(BUS_L_C downto BUS_R_C) := (others => SIMPLE_BUS_MST_INIT_C);
    signal   readysOb          : std_logic_vector (BUS_L_C downto BUS_R_C) := (others => '1'                  );
 
-   signal   loopback          : std_logic;
+   signal   tck, tdi, tms, tdo: std_logic;
 
 begin
 
@@ -101,7 +101,7 @@ begin
       generic map (
          SPI_CLK_FREQ_G       => 4.0E5,
          SPI_FREQ_G           => 1.0E5,
-	 CMDS_SUPPORTED_G     => CMDS_SUPPORTED_C
+         CMDS_SUPPORTED_G     => CMDS_SUPPORTED_C
       )
       port map (
          clk          => clk,
@@ -126,7 +126,7 @@ begin
          readysOb     => readysOb
       );
 
-   U_DUT : entity work.CommandJtagBB
+   U_JTAG_BB : entity work.CommandJtagBB
       generic map (
          HPER_DELAY_G => 2
       )
@@ -140,11 +140,33 @@ begin
          mOb          => bussesOb( CMD_JTAG_C ),
          rOb          => readysOb( CMD_JTAG_C ),
 
-         tck          => open,
-         tms          => open,
-	 tdi          => loopback,
-	 tdo          => loopback
+         tck          => tck,
+         tms          => tms,
+         tdi          => tdi,
+         tdo          => tdo
       );
+
+   U_DUT  : entity work.JTAGH19EMUL
+      port map (
+         clk          => clk,
+         rst          => rst(rst'left),
+
+         tck          => tck,
+         tms          => tms,
+
+         tdi          => tdi,
+         tdo          => tdo,
+
+         jtck         => open,
+         jtdi         => open,
+         jrstn        => open,
+         jshift       => open,
+         jupdate      => open,
+         jce2         => open,
+         ip_enable    => open,
+         er2_tdo      => (others => '0')
+      );
+
 
    P_RST  : process ( clk ) is
    begin
