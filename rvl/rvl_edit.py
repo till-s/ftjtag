@@ -21,7 +21,7 @@ def vhdl_editor(blob):
     if ( jtagh19_inst.search(blob) is None ):
         raise NoH19Error("vhdl_editor: no jtagh19 or jtagh19soft found")
 
-    # This pattenr can be used to change the port map of JTAGH19EMUL. Currently we assume we know
+    # This pattern can be used to change the port map of JTAGH19EMUL. Currently we assume we know
     # the port names (simply jtck, jtdi, jshift, ...) but we could extract from the instantiation
     # above before removing it.
     portmap=re.compile(r'[=][>]\s*(jtck|jrstn|jtdi|jshift|jupdate|jce2|er2_tdo|ip_enable)emu\s*([,)])',re.IGNORECASE)
