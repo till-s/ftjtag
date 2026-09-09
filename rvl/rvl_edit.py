@@ -40,13 +40,19 @@ def verilog_editor(blob):
     v_portmap=r'[.](' + '|'.join(plst) + r')' + pmap_pat
     # construct a dict <port-name> -> <original_port_map>
     pmap=dict()
-    orig_inst = re.search(r'JTAGH19(SOFT)?\b[^;]*[;]', blob)
+    # no '.' between module name and ';' - omit declarations!
+    mod_body_patt=r'([^;]*[.])+[^;]*[;]'
+    orig_patt = re.compile(r'\bJTAGH19(SOFT)?\b' + mod_body_patt)
+    # reveal may rename the module by appending stuff!
+    # Allow non-space continuation after JTAGH19EMUL
+    emul_patt = re.compile(r'JTAGH19EMUL' + mod_body_patt)
+    orig_inst = orig_patt.search(blob)
     if ( orig_inst is None ):
         raise NoH19Error("verilog_editor: no jtagh19 or jtagh19soft found")
-    emul_inst = re.search(r'JTAGH19EMUL?\b[^;]*[;]', blob)
+    # no '.' between module name and ';' - omit declarations!
+    emul_inst = emul_patt.search(blob)
     if ( emul_inst is None ):
-        raise NoH19Error("verilog_editor: jtagh19emul found")
-    emul_inst = re.search(r'JTAGH19EMUL?\b[^;]*[;]', blob)
+        raise NoH19Error("verilog_editor: no jtagh19emul found")
     # for each port find its mapping in the JTAGH19 or JTAGH19SOFT instantiation
     for port in plst:
         m=re.search(r'[.]'+ port + pmap_pat, orig_inst.group(0))
@@ -55,7 +61,9 @@ def verilog_editor(blob):
     # by the original ones
     def s(m):
         return '.' + m.group(1) + pmap[m.group(1)]
+    print("emulinst ", emul_inst)
     emulstr_new=re.sub(v_portmap, s, emul_inst.group(0))
+    print("emulstr_new ", emulstr_new)
     # replace the emul instantiation by the remapped one
     # and remove the original instantiation
     def s(m):
@@ -63,7 +71,29 @@ def verilog_editor(blob):
             return emulstr_new
         else:
             return ''
-    return re.sub(r'\b(JTAGH19(SOFT|EMUL))[^;]*[;]',s,blob)
+    # Again: allow non-space continuation after EMUL - reveal may rename!
+    blob = re.sub(r'(JTAGH19(SOFT|EMUL))'+mod_body_patt,s,blob)
+    # Remove top-level ports for TCK(SOFT)? & friends
+    # a port declaration PD (e.g., 'input|output wire TCKSOFT')
+    # may either be the first declaration in which case it is preceded
+    # by a '(' and in which case we eat a trailing ',' if it is present
+    # or the declaration must be preceded by a optional comma (which we
+    # eat and may be followed byt ')', i.e.,
+    #
+    # Either  '(' PD [',']
+    # OR      [','] PD [')']
+    #
+    # We eat the declaration as well as trailing or leading commas but
+    # leave the parenthesis.
+    def s1(m):
+        cls_paren = m.group(9)
+        opn_paren = m.group(1)
+        if ( not opn_paren is None ):
+            return "("
+        return cls_paren
+    prtdecl = r'\s*\b(in|out)put\b\s+\bwire\b\s+(TCK|TMS|TDI|TDO)(SOFT)?\s*'
+    blob = re.sub(r'([(]' + prtdecl + r'[,]?)|([,]?' + prtdecl + r'([)]?))', s1, blob)
+    return blob
 
 def edit(f, editor):
     blob = f.read()
