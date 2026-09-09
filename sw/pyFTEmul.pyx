@@ -12,7 +12,7 @@ cdef extern from "FTEmul.hpp" namespace "ftemul":
 		void toStateRunTestIdle() except+
 		void toStateShiftIR(bool resetFirst) except+
 		void toStateShiftDR(bool resetFirst) except+
-		void ft(const uint8_t *buf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_t rsize) except+
+		ssize_t ft(const uint8_t *buf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_t rsize) except+
 		ssize_t shiftToRunTestIdle(const uint8_t *tbuf, size_t tsiz, int bits, uint8_t *rbuf, size_t rsiz) except+
 
 cdef class PyFTEmul:
@@ -40,6 +40,22 @@ cdef class PyFTEmul:
 		status = self.c_fw.shiftToRunTestIdle(tx, len(tx), lastbits - 1, &rbuf[0], len(tx))
 		if ( status < 0 ):
 			raise RuntimeError("_shift: shiftToRunTestIdle failed: {:d}".format(status))
+		return rbuf;
+
+	def _ft(self, bytes tx, rlen = 0, lastbits = 8, tms = -1):
+		cdef vector[uint8_t] rbuf
+		cdef uint8_t        *rptr
+		cdef int             status
+		if ( lastbits < 1 or lastbits > 8 ):
+			raise RuntimeError("_shift: lastbits not in 1..8");
+		if ( rlen > 0 ):
+			rbuf.resize(rlen)
+			rptr = &rbuf[0]
+		else:
+			rptr = NULL
+		status = self.c_fw.ft(tx, len(tx), lastbits - 1, tms, rptr, rlen)
+		if ( status < 0 ):
+			raise RuntimeError("_ft: {:d}".format(status))
 		return rbuf;
 
 	def shiftIR(self, bytes tx, lastbits = 8):
