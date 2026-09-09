@@ -18,7 +18,7 @@ cdef extern from "FTEmul.hpp" namespace "ftemul":
 cdef class PyFTEmul:
 	cdef FW *c_fw
 
-	def __cinit__(self, ttynam, dbg = 0):
+	def __init__(self, ttynam, dbg = 0):
 		self.c_fw = new FW(ttynam, dbg)
 		self.c_fw.toStateRunTestIdle()
 
