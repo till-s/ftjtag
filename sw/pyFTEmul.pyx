@@ -6,20 +6,42 @@ from libc.stdint   cimport *
 from libc.stdio    cimport *
 
 cdef extern from "FTEmul.hpp" namespace "ftemul":
-	cppclass FW:
-		FW(const char *devnm, int dbg) except+
+	cdef cppclass FTStream:
+		void setDebug(int mask) except+
 		void toStateReset() except+
 		void toStateRunTestIdle() except+
 		void toStateShiftIR(bool resetFirst) except+
 		void toStateShiftDR(bool resetFirst) except+
 		ssize_t ft(const uint8_t *buf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_t rsize) except+
 		ssize_t shiftToRunTestIdle(const uint8_t *tbuf, size_t tsiz, int bits, uint8_t *rbuf, size_t rsiz) except+
+	cdef cppclass FW(FTStream):
+		FW(const char *devnm) except+
+	cdef cppclass RawFifo(FTStream):
+		cppclass Config:
+			uint8_t addr
+			bool    cobs
+			size_t  windowSize
+			Config()
+		RawFifo(const char *devnm, const Config &cfg) except+
 
 cdef class PyFTEmul:
-	cdef FW *c_fw
 
-	def __init__(self, ttynam, dbg = 0):
-		self.c_fw = new FW(ttynam, dbg)
+	cdef FTStream *c_fw
+
+	def __init__(self, ttynam, dbg = 0, windowSize = 0):
+		cdef RawFifo.Config fifoCfg
+		fifoCfg.windowSize = windowSize
+		fifoCfg.cobs       = True
+		fifoCfg.addr       = 0x00
+		pre                = "raw:"
+		if ( ttynam.startswith(pre) ):
+			ttynam = ttynam.removeprefix(pre)
+			self.c_fw = new RawFifo(ttynam, fifoCfg)
+		else:
+			if ( windowSize > 0 ):
+				raise RuntimeError("window size not supported")
+			self.c_fw = new FW(ttynam)
+		self.c_fw.setDebug(dbg)
 		self.c_fw.toStateRunTestIdle()
 
 	def __dealloc__(self):

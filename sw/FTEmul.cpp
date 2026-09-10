@@ -5,6 +5,7 @@
 
 #include <termios.h>
 #include <vector>
+#include <cstring>
 
 namespace ftemul {
 
@@ -21,32 +22,38 @@ namespace {
 
 }
 
-FW::FW(const char *devnm, int dbg)
-: dbg_(dbg)
+void FWDeleter::operator()(FWInfo *fw)
 {
-	if ( ! ( fw_ = fw_open(devnm, B115200) ) ) {
+	fw_close(fw);
+}
+
+FW::FW(const char *devnm)
+{
+	if ( ! ( fw_ = std::unique_ptr<FWInfo, FWDeleter>(fw_open(devnm, B115200), FWDeleter()) ) ) {
 		throw std::runtime_error("unable to open device");
 	}
 }
 
 void
-FW::setDebug(int lvl)
+FW::setDebug(int mask)
 {
-	fw_set_debug(fw_, lvl);
+	FTStream::setDebug( mask );
+	int lvl =  !!(dbg_ && DEBUG_FW) ? 2 : 0;
+	fw_set_debug(fw_.get(), lvl);
 }
 
 void
 FW::printVersion()
 {
-	printf("GIT 0x%08" PRIx32 "\n", fw_get_version(fw_));
-	printf("BRD 0x%02" PRIx8  "\n", fw_get_board_version(fw_));
-	printf("API 0x%02" PRIx8  "\n", fw_get_api_version(fw_));
-	printf("FUN 0x%02" PRIx8  "\n", fw_get_api_function(fw_));
+	printf("GIT 0x%08" PRIx32 "\n", fw_get_version(fw_.get()));
+	printf("BRD 0x%02" PRIx8  "\n", fw_get_board_version(fw_.get()));
+	printf("API 0x%02" PRIx8  "\n", fw_get_api_version(fw_.get()));
+	printf("FUN 0x%02" PRIx8  "\n", fw_get_api_function(fw_.get()));
 }
 
 // returns #bits in 1st byte
 void
-FW::x(const Bytes &req, Bytes &rep, bool tms)
+FTStream::x(const Bytes &req, Bytes &rep, bool tms)
 {
 	int st;
 	Bytes discard;
@@ -62,17 +69,17 @@ FW::x(const Bytes &req, Bytes &rep, bool tms)
 		rvec[0].buf = &discard[0];
 		rvec[0].len = discard.size();
 	}
-	if ( dbg_ > 0 ) {
+	if ( !!(dbg_ & DEBUG_FT) ) {
 		printf("sending OUT %zd\n", req.size());
 		for (size_t i = 0; i < req.size(); ++i ) {
 			printf("0x%02x\n", req[i]);
 		}
 	}
-	if ( (st = fw_xfer_vec(fw_, (tms ? (CMD_JTAG | CMD_TMS) : CMD_JTAG), tvec,  1 , rvec,  1)) < 0 ) {
-		throw std::system_error(-st, std::generic_category(), "fw_xfer failed");
+	if ( (st = xfer((tms ? (CMD_JTAG | CMD_TMS) : CMD_JTAG), tvec,  1 , rvec,  1)) < 0 ) {
+		throw std::system_error(-st, std::generic_category(), "xfer failed");
 	}
 	rep.resize(st);
-	if ( dbg_ > 0 ) {
+	if ( !!(dbg_ & DEBUG_FT) ) {
 		printf("transferred IN %d\n", st);
 		for (size_t i = 0; i < rep.size(); ++i ) {
 			printf("0x%02x\n", rep[i]);
@@ -80,8 +87,14 @@ FW::x(const Bytes &req, Bytes &rep, bool tms)
 	}
 }
 
+ssize_t
+FW::xfer(uint8_t cmd, const tbufvec *tvec, size_t tveclen, const rbufvec *rvec, size_t rveclen)
+{
+	return fw_xfer_vec(fw_.get(), cmd, tvec,  tveclen , rvec, rveclen );
+}
+
 void
-FW::toStateReset()
+FTStream::toStateReset()
 {
 	Bytes req, rep;
 	// RESET
@@ -91,7 +104,7 @@ FW::toStateReset()
 }
 
 void
-FW::toStateRunTestIdle()
+FTStream::toStateRunTestIdle()
 {
 	Bytes req, rep;
 	// RESET -> RUN_TEST_IDLE
@@ -102,7 +115,7 @@ FW::toStateRunTestIdle()
 
 
 void
-FW::toStateShiftIR(bool resetFirst)
+FTStream::toStateShiftIR(bool resetFirst)
 {
 	if ( resetFirst ) {
 		toStateRunTestIdle();
@@ -115,7 +128,7 @@ FW::toStateShiftIR(bool resetFirst)
 }
 
 unsigned
-FW::countChainLength()
+FTStream::countChainLength()
 {
 	toStateShiftIR();
 
@@ -154,7 +167,7 @@ FW::countChainLength()
 }
 
 void
-FW::toStateShiftDR(bool resetFirst)
+FTStream::toStateShiftDR(bool resetFirst)
 {
 	if ( resetFirst ) {
 		toStateRunTestIdle();
@@ -166,7 +179,7 @@ FW::toStateShiftDR(bool resetFirst)
 }
 
 void
-FW::getIDs(std::vector<uint32_t> &ids, unsigned nDevs)
+FTStream::getIDs(std::vector<uint32_t> &ids, unsigned nDevs)
 {
 	ids.clear();
 	if ( 0 == nDevs ) {
@@ -188,20 +201,29 @@ FW::getIDs(std::vector<uint32_t> &ids, unsigned nDevs)
 }
 
 void
-FW::setPortLevels(const uint8_t dat)
+FTStream::setPortLevels(const uint8_t dat)
 {
 	uint8_t cmd = CMD_JTAG | CMD_BB;
 	uint8_t unused;
 	int got;
 
-	got = fw_xfer(fw_, cmd, &dat, &unused, 1);
+	tbufvec tvec[1];
+	rbufvec rvec[1];
+
+	tvec[0].buf = &dat;
+	tvec[0].len = sizeof(dat);
+
+	rvec[0].buf = &unused;
+	rvec[0].len = sizeof(unused);
+
+	got = xfer(cmd, tvec, sizeof(tvec)/sizeof(tvec[0]), rvec, sizeof(rvec)/sizeof(rvec[0]));
 	if ( got < 0 ) {
 		throw std::system_error(-got, std::generic_category(), "fw_xfer failed");
 	}
 }
 
 ssize_t
-FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_t rsiz)
+FTStream::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_t rsiz)
 {
 	if ( tsiz && rsiz && (rsiz != tsiz) ) {
 		throw std::system_error(-EINVAL, std::generic_category(), "ft: tsiz/rsiz mismatch");
@@ -258,10 +280,10 @@ FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_
 		rveclen++;
 	}
 	int got;
-	if ( (got = fw_xfer_vec(fw_, cmd, tvec, tveclen, rvec, rveclen)) < 0 ) {
-		throw std::system_error(-got, std::generic_category(), "fw_xfer failed");
+	if ( (got = xfer(cmd, tvec, tveclen, rvec, rveclen)) < 0 ) {
+		throw std::system_error(-got, std::generic_category(), "xfer failed");
 	}
-	if ( dbg_ > 0 ) {
+	if ( !!(dbg_ & DEBUG_FT) ) {
 		size_t vi;
 		size_t ii;
 		int    tt;
@@ -293,7 +315,7 @@ FW::ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms, uint8_t *rbuf, size_
 }
 
 ssize_t
-FW::shiftToRunTestIdle(const uint8_t *tbuf, size_t tsiz, int bits, uint8_t *rbuf, size_t rsiz)
+FTStream::shiftToRunTestIdle(const uint8_t *tbuf, size_t tsiz, int bits, uint8_t *rbuf, size_t rsiz)
 {
 	if ( tsiz && rsiz && (tsiz != rsiz) ) {
 		throw std::system_error(-EINVAL, std::generic_category(), "ft: tsiz/rsiz mismatch");
@@ -339,7 +361,7 @@ FW::bb(const uint8_t *tbuf, uint8_t *rbuf, size_t bufsz)
 		b[2*i + 0] = (tbuf[i] & ~BB_TCK_BIT);
 		b[2*i + 1] = (tbuf[i] |  BB_TCK_BIT);
 	}
-	int st = fw_xfer( fw_, CMD_BB_SPI, &b[0], rbuf ? &b[0] : nullptr, b.size() );
+	int st = fw_xfer( fw_.get(), CMD_BB_SPI, &b[0], rbuf ? &b[0] : nullptr, b.size() );
 	if ( st < 0 ) {
 		throw std::system_error(-st, std::generic_category(), "fw_xfer failed");
 	}
@@ -350,10 +372,41 @@ FW::bb(const uint8_t *tbuf, uint8_t *rbuf, size_t bufsz)
 	}
 }
 
-
-FW::~FW()
+RawFifo::RawFifo(const char *devnm, const struct RawFifo::Config &config)
+ : addr_( config.addr & ADDR_MASK )
 {
-	fw_close( fw_ );
+	CmdFifoConfig cfg;
+	memset( &cfg, 0, sizeof(cfg) );
+
+	cfg.ttyName    = devnm;
+	cfg.windowSize = config.windowSize;
+	if ( config.cobs ) {
+		cfg.codec = CMD_FIFO_CFG_CODEC_COBS;
+	} else {
+		cfg.codec = CMD_FIFO_CFG_CODEC_BYTESTUFF;
+	}
+	cfg.flags = CMD_FIFO_CFG_WINSIZE;
+
+	CmdFifo fifo   = nullptr;
+	int     status = fifoOpenConfig( &fifo, &cfg );
+	if ( status < 0 ) {
+		throw std::system_error(-status, std::generic_category(), "fifoOpenConfig failed");
+	}
+	fifo_ = std::unique_ptr<CmdFifoRec, FifoDeleter>( fifo, FifoDeleter());
 }
+
+ssize_t
+RawFifo::xfer(uint8_t cmd, const tbufvec *tvec, size_t tveclen, const rbufvec *rvec, size_t rveclen)
+{
+	cmd |= addr_;
+	return fifoXferFrameVec( fifo_.get(), &cmd, tvec, tveclen, rvec, rveclen );
+}
+
+void
+FifoDeleter::operator()(CmdFifo fifo)
+{
+	fifoClose( fifo );
+}
+
 
 } // namespace ftemul

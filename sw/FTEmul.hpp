@@ -3,34 +3,73 @@
 
 #include <cinttypes>
 #include <vector>
+#include <memory>
 
 namespace ftemul {
 
 using Bytes = std::vector<uint8_t>;
 
-class FW {
-  FWInfo *fw_;
-  int    dbg_{0};
-public:
-  FW(const char *devnm, int dbg = 0);
+// base class defining fundamental operations
+class FTStream {
+ protected:
+  int                                  dbg_{0};
+ public:
 
-  void printVersion();
+  virtual ssize_t xfer(uint8_t cmd, const tbufvec *tbuf, size_t tbuflen, const rbufvec *rbuf, size_t rbuflen) = 0;
 
-  // level 2 for fifoXferVec dumps
-  void setDebug(int lvl);
+  // debug flags can be ORed together
+  static constexpr int DEBUG_FT = (1<<0);
 
-  void x(const Bytes &req, Bytes &rep, bool tms = false);
+  virtual void setDebug(int mask) { dbg_ = mask; }
+
+  // basic transfers
+  virtual void x(const Bytes &req, Bytes &rep, bool tms = false);
 
   // 'bits': # of bits to use from last byte (zero-based)
   // 'tms' : > 0 -> shift TMS with TDI = 1
   //         = 0 -> shift TMS with TDI = 0
   //         < 0 -> shift TDI
-  ssize_t ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms = -1, uint8_t *rbuf = nullptr, size_t rsiz = 0);
+  virtual ssize_t ft(const uint8_t *tbuf, size_t tsiz, int bits, int tms = -1, uint8_t *rbuf = nullptr, size_t rsiz = 0);
 
-  ssize_t ft(const uint8_t *tbuf, size_t tsiz, uint8_t *rbuf = nullptr, size_t rsiz = 0)
+  virtual ssize_t ft(const uint8_t *tbuf, size_t tsiz, uint8_t *rbuf = nullptr, size_t rsiz = 0)
   {
 	  return ft(tbuf, tsiz, 7, -1, rbuf, rsiz);
   }
+
+  // bit-assignment std. ftdi: 0->tck, 1->tdi, 2->tdo, 3->tms
+  virtual void setPortLevels(uint8_t dat);
+
+  virtual void toStateReset();
+
+  virtual void toStateRunTestIdle();
+
+  virtual void toStateShiftIR(bool toRTIFirst = true);
+
+  virtual unsigned countChainLength();
+
+  virtual void toStateShiftDR(bool toRTIFirst = true);
+
+  virtual ssize_t shiftToRunTestIdle(const uint8_t *tbuf, size_t tsiz, int bits, uint8_t *rbuf, size_t rsiz);
+
+  virtual void getIDs(std::vector<uint32_t> &ids, unsigned nDevs = 1);
+
+  virtual ~FTStream() = default;
+};
+
+// Full-firmware with command mux
+//
+struct FWDeleter {
+	void operator()(FWInfo *);
+};
+
+class FW : public FTStream {
+  std::unique_ptr<FWInfo,FWDeleter> fw_;
+public:
+  static constexpr int DEBUG_FW = (1<<4);
+
+  FW(const char *devnm);
+
+  virtual void printVersion();
 
   // each byte in TBUF contains
   //  bit(0): tms
@@ -39,26 +78,33 @@ public:
   //  bit(3): 0  (will be used for tck)
   //
   //  tdo is returned in rbuf bit(2)
-  void bb(const uint8_t *tbuf, uint8_t *rbuf, size_t bufsz);
+  virtual void bb(const uint8_t *tbuf, uint8_t *rbuf, size_t bufsz);
 
-  // bit-assignment std. ftdi: 0->tck, 1->tdi, 2->tdo, 3->tms
-  void setPortLevels(uint8_t dat);
+  virtual void setDebug(int msk) override;
 
-  void toStateReset();
+  virtual ssize_t xfer(uint8_t cmd, const tbufvec *tvec, size_t tveclen, const rbufvec *rvec, size_t rveclen) override;
+};
 
-  void toStateRunTestIdle();
+struct FifoDeleter {
+	void operator()(CmdFifo);
+};
 
-  void toStateShiftIR(bool toRTIFirst = true);
+// Raw Fifo supporting only JTAG
+class RawFifo : public FTStream {
+  std::unique_ptr<CmdFifoRec,FifoDeleter> fifo_;
+  const uint8_t                        addr_;
+  static constexpr const uint8_t       ADDR_MASK = 0x0f;
+public:
+  struct Config {
+	  uint8_t addr;
+	  bool    cobs;
+	  size_t  windowSize;
 
-  unsigned countChainLength();
+	  Config() : addr (0x00), cobs (true), windowSize(0) {}
+  };
+  RawFifo(const char *devnm, const struct Config &cfg = Config());
 
-  void toStateShiftDR(bool toRTIFirst = true);
-
-  ssize_t shiftToRunTestIdle(const uint8_t *tbuf, size_t tsiz, int bits, uint8_t *rbuf, size_t rsiz);
-
-  void getIDs(std::vector<uint32_t> &ids, unsigned nDevs = 1);
-
-  ~FW();
+  virtual ssize_t xfer(uint8_t cmd, const tbufvec *tvec, size_t tveclen, const rbufvec *rvec, size_t rveclen) override;
 };
 
 } // namespace ftemul
