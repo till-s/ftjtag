@@ -9,22 +9,32 @@
 #include <JtagAna.hpp>
 #include <getopt.h>
 #include <time.h>
+#include <cstring>
 
 using std::string;
 using namespace Toastbox;
 using namespace ftemul;
 using std::vector;
 
-class FWAdapter : public ftemul::FW, public FTInterface {
+class FWAdapter : public FTInterface {
+	std::shared_ptr<ftemul::FTStream> ft_;
 public:
-	FWAdapter(const char *dev) : FW(dev) {}
+	FWAdapter(const char *dev) {
+		const char *pre = "raw:";
+		size_t      off = strlen(pre);
+		if ( 0 == strncmp(dev, pre, off) ) {
+			ft_ = std::make_shared<ftemul::RawFifo>(dev + off);
+		} else {
+			ft_ = std::make_shared<ftemul::FW>(dev);
+		}
+	}
 
 	virtual void setPortLevels(uint8_t l) override {
-		FW::setPortLevels(l);
+		ft_->setPortLevels(l);
 	}
 
         virtual ssize_t mpsse(const uint8_t *tbuf, size_t tsize, int bits, ShiftOp op = ShiftOp::TDI, uint8_t *rbuf = nullptr, size_t rsize = 0) override {
-		return FW::ft(tbuf, tsize, bits, static_cast<int>(op), rbuf, rsize);
+		return ft_->ft(tbuf, tsize, bits, static_cast<int>(op), rbuf, rsize);
 	}
 };
 
