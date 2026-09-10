@@ -16,6 +16,9 @@ public:
 
   void printVersion();
 
+  // level 2 for fifoXferVec dumps
+  void setDebug(int lvl);
+
   void x(const Bytes &req, Bytes &rep, bool tms = false);
 
   // 'bits': # of bits to use from last byte (zero-based)

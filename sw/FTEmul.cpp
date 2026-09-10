@@ -30,6 +30,12 @@ FW::FW(const char *devnm, int dbg)
 }
 
 void
+FW::setDebug(int lvl)
+{
+	fw_set_debug(fw_, lvl);
+}
+
+void
 FW::printVersion()
 {
 	printf("GIT 0x%08" PRIx32 "\n", fw_get_version(fw_));
