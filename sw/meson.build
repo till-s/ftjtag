@@ -42,7 +42,7 @@ if (ftd2xxlib.found())
 
 py.extension_module(
   'pyMPSSE',
-  ['pyMPSSE.pyx'],
+  ['pyMPSSE.pyx', 'MPSSE.cpp'],
   override_options : ['cython_language=cpp'],
   include_directories : [inc, ftdirs],
   dependencies: [ftd2xxlib]
