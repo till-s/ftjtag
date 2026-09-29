@@ -1,12 +1,12 @@
 [submodule "modules/usbadc-support"]
 	path = modules/acm-toolbox
-	url = git@github.com:till-s/usbadc-support
+	url = ../usbadc-support
 [submodule "modules/mecatica-usb"]
 	path = modules/mecatica-usb
-	url = git@github.com:till-s/mecatica-usb
+	url = ../mecatica-usb
 [submodule "modules/efx-scripts"]
 	path = modules/efx-scripts
-	url = git@github.com:till-s/efx-scripts.git
+	url = ../efx-scripts.git
 [submodule "modules/jtag-utils"]
 	path = modules/jtag-utils
 	url = ../jtag-utils
@@ -16,4 +16,4 @@
 	branch = stti_feature
 [submodule "modules/cobs"]
 	path = modules/cobs
-	url = git@github.com:till-s/cobs
+	url = ../cobs
