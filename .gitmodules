@@ -9,10 +9,10 @@
 	url = git@github.com:till-s/efx-scripts.git
 [submodule "modules/jtag-utils"]
 	path = modules/jtag-utils
-	url = ./modules/jtag-utils/
+	url = ../jtag-utils
 [submodule "modules/VirtualUSBDevice"]
 	path = modules/VirtualUSBDevice
-	url = ./modules/VirtualUSBDevice/
+	url = ../VirtualUSBDevice
 	branch = stti_feature
 [submodule "modules/cobs"]
 	path = modules/cobs
