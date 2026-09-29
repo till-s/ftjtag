@@ -1,5 +1,4 @@
 AppCfgPkgBody.vhd
-makefile
 *.o
 CommandWrapperSim
 work-obj93.cf
